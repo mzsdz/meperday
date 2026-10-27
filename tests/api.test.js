@@ -138,3 +138,13 @@ test("unsafe image input rejected before provider call and billing errors remain
   assert.equal(res.code, 503);
   assert.equal(res.body.nutrients, undefined);
 });
+
+test("runtime OIDC request context enables AI without a static environment token", async () => {
+  const res = response();
+  await createAnalysisHandler({env: {}, resolveOidc: async () => "private-runtime-token"})({method:"GET"}, res);
+  assert.deepEqual(res.body, {configured:true, requiresLogin:true});
+  assert.ok(!JSON.stringify(res.body).includes("private-runtime-token"));
+  const missing = response();
+  await createAnalysisHandler({env: {}, resolveOidc: async () => {throw Error("missing")}})({method:"GET"}, missing);
+  assert.equal(missing.body.configured, false);
+});

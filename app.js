@@ -1,6 +1,12 @@
+import { analyzePhoto } from "./analysis-client.js";
 import exifr from "exifr";
 import { compressImage } from "./photos.js";
-import { cloud, createJournalStore, loginLinkError } from "./cloud.js";
+import {
+  cloud,
+  createJournalStore,
+  loginLinkError,
+  googleEnabled,
+} from "./cloud.js";
 import {
   captureTime,
   calorieSummary,
@@ -249,7 +255,32 @@ import {
     overlayOpen = false,
     recOffset = 0;
   const $ = (s) => document.querySelector(s);
-  let loadedUserId = null;
+  let loadedUserId = null,
+    aiReady = false,
+    refreshPhotoAnalysis = () => {};
+  function updateAnalysisButton(button, state, kind) {
+    button.disabled = !!(
+      state.processing ||
+      state.analyzing ||
+      !state.photo ||
+      !store ||
+      !aiReady
+    );
+    button.textContent = !store
+      ? "AI 분석은 로그인 후 사용"
+      : !aiReady
+        ? "AI 연결 준비 중"
+        : kind === "food"
+          ? "✦ 사진 AI 분석"
+          : "✦ 운동 캡처 분석";
+  }
+  fetch("/api/analyze")
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((j) => {
+      aiReady = j.configured === true;
+      refreshPhotoAnalysis();
+    })
+    .catch(() => {});
   function updateViewport() {
     const viewport = window.visualViewport;
     document.documentElement.style.setProperty(
@@ -502,8 +533,43 @@ import {
   }
   function showLogin() {
     showSheet(
-      `${head("내 기록을 계정에 보관하기", "로그인 없이도 기록할 수 있어요. 로그인하면 다른 기기에서도 이어 볼 수 있어요.")}<form id="loginForm"><div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="name@example.com" required /></div><button type="submit" class="button full">로그인 링크 받기</button><p id="authStatus" role="status"></p><p class="disclaimer">기기에 저장한 기록은 로그인 후 설정에서 가져올 수 있어요.</p><button type="button" class="button secondary full" data-close>지금은 이 기기에 기록하기</button></form>`,
+      `${head("내 기록을 계정에 보관하기", "로그인 없이도 기록할 수 있어요. 로그인하면 다른 기기에서도 이어 볼 수 있어요.")}<button type="button" class="button oauth-button full" id="googleSignIn" disabled><span class="google-mark" aria-hidden="true">G</span>Google로 계속하기</button><p id="oauthStatus" class="disclaimer" role="status">Google 로그인 연결 확인 중…</p><div class="login-divider">또는 이메일</div><form id="loginForm"><div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="name@example.com" required /></div><button type="submit" class="button full">로그인 링크 받기</button><p id="authStatus" role="status"></p><p class="disclaimer">기기에 저장한 기록은 로그인 후 설정에서 가져올 수 있어요.</p><button type="button" class="button secondary full" data-close>지금은 이 기기에 기록하기</button></form>`,
     );
+    const googleButton = $("#googleSignIn"),
+      oauthStatus = $("#oauthStatus");
+    googleEnabled()
+      .then((enabled) => {
+        if (!googleButton.isConnected) return;
+        googleButton.disabled = !enabled;
+        oauthStatus.textContent = enabled
+          ? "구글 계정으로 로그인하고 기록을 이어 보세요."
+          : "Google 로그인 설정이 아직 완료되지 않았어요. 이메일 로그인은 사용할 수 있어요.";
+      })
+      .catch(() => {
+        if (oauthStatus.isConnected)
+          oauthStatus.textContent =
+            "Google 연결을 확인하지 못했어요. 이메일 로그인은 사용할 수 있어요.";
+      });
+    googleButton.onclick = async () => {
+      googleButton.disabled = true;
+      oauthStatus.textContent = "Google 로그인으로 이동하고 있어요…";
+      try {
+        const { error } = await cloud.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: location.origin,
+            queryParams: { prompt: "select_account" },
+          },
+        });
+        if (error) throw error;
+      } catch {
+        if (oauthStatus.isConnected) {
+          oauthStatus.textContent =
+            "Google 로그인을 시작하지 못했어요. 다시 시도하거나 이메일로 로그인해 주세요.";
+          googleButton.disabled = false;
+        }
+      }
+    };
     $("#loginForm").onsubmit = async (e) => {
       e.preventDefault();
       const button = e.target.querySelector('button[type="submit"]');
@@ -615,7 +681,7 @@ import {
     const time = r?.time || "",
       date = r?.date || selected;
     showSheet(
-      `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><div class="field"><label for="foodMeal">구분</label><select id="foodMeal">${MEALS.map(([k, l]) => `<option value="${k}" ${meal === k ? "selected" : ""}>${l}</option>`).join("")}</select></div><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석 (서버 연결 시)</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">AI 연결이 없어도 사진과 간단한 입력만으로 기록할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
+      `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><div class="field"><label for="foodMeal">구분</label><select id="foodMeal">${MEALS.map(([k, l]) => `<option value="${k}" ${meal === k ? "selected" : ""}>${l}</option>`).join("")}</select></div><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">분석 버튼을 누르면 사진을 AI 제공자에게 전송해요. 결과는 추정값이며 직접 수정할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
     );
     bindPhotoInput({
       input: "#foodFile",
@@ -630,29 +696,24 @@ import {
       if (!state.photo) return;
       const analyzedPhoto = state.photo;
       let b = $("#foodAnalyze");
+      state.analyzing = true;
       b.disabled = true;
       b.textContent = "사진을 분석하고 있어요…";
       $("#analyzeStatus").textContent = "사진은 분석을 위해 서버로 전송돼요.";
       try {
-        let code = localStorage.getItem("meday-access-code") || "";
-        const res = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-meday-code": code },
-          body: JSON.stringify({ kind: "food", image: state.photo }),
-        });
-        let j = await res.json();
+        const j = await analyzePhoto("food", state.photo);
         if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
           return;
-        if (!res.ok) throw Error(j.error || "서버 연결 실패");
         state.analysis = j;
         $("#foodName").value = j.name || "";
         $("#foodKcal").value = j.kcal ?? "";
         Object.entries(j.nutrients || {}).forEach(([key, val]) => {
           const el = document.querySelector(`[data-nut="${key}"]`);
-          if (el && typeof val === "number") el.value = val;
+          if (el) el.value = typeof val === "number" ? val : "";
         });
         $("#analyzeStatus").textContent =
-          "AI 추정값이 채워졌어요. 실제 먹은 양에 맞게 수정할 수 있어요.";
+          "AI 추정값이에요. 먹은 양에 맞게 수정할 수 있어요. " +
+          (j.notes || "");
         toast("AI 분석 결과를 가져왔어요.");
       } catch (e) {
         if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
@@ -661,8 +722,9 @@ import {
           (e.message || "AI 분석을 사용할 수 없어요.") +
           " · 아래에서 직접 입력하면 저장할 수 있어요.";
       } finally {
-        b.disabled = false;
-        b.textContent = "✦ 사진 다시 AI 분석";
+        state.analyzing = false;
+        if (foodAnalysisForm.isConnected)
+          updateAnalysisButton(b, state, "food");
       }
     });
     document.querySelectorAll("[data-preset]").forEach((b) =>
@@ -756,6 +818,12 @@ import {
     message.className = "disclaimer";
     message.setAttribute("role", "status");
     target.after(message);
+    const kind = form === "#foodForm" ? "food" : "exercise";
+    const refresh = () => {
+      if (formEl.isConnected) updateAnalysisButton(analyzeButton, state, kind);
+    };
+    refreshPhotoAnalysis = refresh;
+    refresh();
     let sequence = 0;
     picker.onchange = async () => {
       const file = picker.files[0];
@@ -793,7 +861,7 @@ import {
           state.processing = false;
           if (formEl.isConnected) {
             submit.disabled = false;
-            analyzeButton.disabled = !state.photo;
+            refresh();
             picker.value = "";
           }
         }
@@ -855,33 +923,27 @@ import {
       const analyzedPhoto = state.photo;
       const b = $("#exAnalyze");
       b.disabled = true;
+      state.analyzing = true;
       b.textContent = "캡처를 분석하고 있어요…";
       try {
-        let r = await fetch("/api/analyze", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-meday-code": localStorage.getItem("meday-access-code") || "",
-          },
-          body: JSON.stringify({ kind: "exercise", image: state.photo }),
-        });
-        let j = await r.json();
+        const j = await analyzePhoto("exercise", state.photo);
         if (!exerciseAnalysisForm.isConnected || state.photo !== analyzedPhoto)
           return;
-        if (!r.ok) throw Error(j.error || "연결 실패");
+        state.analysis = j;
         $("#exType").value = j.type || "";
         $("#exMinutes").value = j.minutes ?? "";
         $("#exCalories").value = j.calories ?? "";
         $("#exStatus").textContent =
-          "AI 추출값이 채워졌어요. 맞는지 확인해 주세요.";
+          "AI 추출 결과를 확인해 주세요. " + (j.notes || "");
       } catch (e) {
         if (!exerciseAnalysisForm.isConnected || state.photo !== analyzedPhoto)
           return;
         $("#exStatus").textContent =
           e.message + " · 직접 입력해도 기록할 수 있어요.";
       } finally {
-        b.disabled = false;
-        b.textContent = "✦ 캡처 다시 분석";
+        state.analyzing = false;
+        if (exerciseAnalysisForm.isConnected)
+          updateAnalysisButton(b, state, "exercise");
       }
     };
     $("#exerciseForm").onsubmit = async (e) => {
@@ -1064,7 +1126,7 @@ import {
   }
   function showSettings() {
     showSheet(
-      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div><div class="field"><label for="accessCode">AI 접근 코드 (서버에 설정한 경우에만)</label><input id="accessCode" type="password" placeholder="미설정이면 비워두세요" value="${esc(localStorage.getItem("meday-access-code") || "")}" /></div><button class="button secondary full" id="saveCode">AI 접근 코드 저장</button>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
+      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
     );
     let device = null;
     try {
@@ -1105,10 +1167,6 @@ import {
       closeSheet();
       render();
       toast("기준량 저장 ✓");
-    };
-    $("#saveCode").onclick = async () => {
-      localStorage.setItem("meday-access-code", $("#accessCode").value);
-      toast("접근 코드 저장 ✓");
     };
     $("#exportData").onclick = async () => {
       const backup = structuredClone(data);

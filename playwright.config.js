@@ -27,7 +27,7 @@ export default defineConfig({
       ? [
           {
             name: "webkit-auth",
-            testMatch: "first-visit.spec.js",
+            testMatch: ["first-visit.spec.js", "google-auth.spec.js"],
             use: {
               browserName: "webkit",
               isMobile: true,
@@ -39,7 +39,7 @@ export default defineConfig({
       : []),
     {
       name: "configured-guest",
-      testMatch: "first-visit.spec.js",
+      testMatch: ["first-visit.spec.js", "google-auth.spec.js"],
       use: { ...chromiumUse, baseURL: "http://127.0.0.1:4174" },
     },
   ],

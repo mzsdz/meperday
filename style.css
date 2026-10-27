@@ -1025,3 +1025,24 @@ button:disabled {
     max-height: calc(var(--viewport-height, 100dvh) - 48px);
   }
 }
+
+.oauth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: white;
+  color: #263b2e;
+  border: 1px solid #dce4dc;
+}
+.google-mark {
+  font-size: 20px;
+  font-weight: 750;
+  color: #4285f4;
+}
+.login-divider {
+  text-align: center;
+  font-size: 12px;
+  color: #89958c;
+  margin: 18px 0;
+}

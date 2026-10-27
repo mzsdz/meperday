@@ -4,7 +4,11 @@ export default defineConfig({
   testDir: "./e2e",
   projects: [
     { name: "local", testMatch: "journal.spec.js", use: chromiumUse },
-    { name: "iphone-flow", testMatch: "iphone-flow.spec.js", use: chromiumUse },
+    {
+      name: "iphone-flow",
+      testMatch: ["iphone-flow.spec.js", "weight-points.spec.js"],
+      use: chromiumUse,
+    },
     {
       name: "upload-layout",
       testMatch: "upload-layout.spec.js",
@@ -14,7 +18,11 @@ export default defineConfig({
       ? [
           {
             name: "webkit-upload",
-            testMatch: ["upload-layout.spec.js", "iphone-flow.spec.js"],
+            testMatch: [
+              "upload-layout.spec.js",
+              "iphone-flow.spec.js",
+              "weight-points.spec.js",
+            ],
             use: {
               browserName: "webkit",
               isMobile: true,
@@ -49,13 +57,15 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "npm run build -- --outDir dist-e2e-local && npm run preview -- --outDir dist-e2e-local --port 4173",
+      command:
+        "npm run build -- --outDir dist-e2e-local && npm run preview -- --outDir dist-e2e-local --port 4173",
       url: "http://127.0.0.1:4173",
       env: { VITE_SUPABASE_URL: "", VITE_SUPABASE_PUBLISHABLE_KEY: "" },
       reuseExistingServer: false,
     },
     {
-      command: "npm run build -- --outDir dist-e2e-account && npm run preview -- --outDir dist-e2e-account --port 4174",
+      command:
+        "npm run build -- --outDir dist-e2e-account && npm run preview -- --outDir dist-e2e-account --port 4174",
       url: "http://127.0.0.1:4174",
       env: {
         VITE_SUPABASE_URL: "https://example.supabase.co",

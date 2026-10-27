@@ -1046,3 +1046,87 @@ button:disabled {
   color: #89958c;
   margin: 18px 0;
 }
+
+.topbar .brand {
+  margin-right: auto;
+}
+.points-button {
+  border: 1px solid #dce4dc;
+  background: #eef3ed;
+  color: #365844;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 18px;
+  padding: 8px 12px;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.points-balance {
+  padding: 18px 0 8px;
+}
+.points-balance strong {
+  display: block;
+  color: #294637;
+  font-size: 38px;
+  margin-top: 6px;
+}
+.points-balance small {
+  font-size: 19px;
+  margin-left: 5px;
+}
+.points-today {
+  font-weight: 700;
+  color: #476851;
+}
+.points-free {
+  background: #edf3ec;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.points-history {
+  list-style: none;
+  padding: 0;
+}
+.points-history li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e8ece6;
+  font-size: 13px;
+}
+.points-history small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #7e8c80;
+}
+.points-history b {
+  color: #426b50;
+  white-space: nowrap;
+}
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.weight-row .chevron {
+  margin-left: auto;
+}
+.weight-row small {
+  display: block;
+  margin-top: 5px;
+  color: #7e8c80;
+  font-size: 11px;
+}
+.weight-row .thumb {
+  flex-shrink: 0;
+}

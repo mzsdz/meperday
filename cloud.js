@@ -21,7 +21,12 @@ export function createJournalStore(client, userId) {
       revision = data?.revision ?? null;
       if (!data) return null;
       const payload = structuredClone(data.payload);
-      for (const row of [...payload.records, ...payload.exercises]) {
+      payload.weights ??= [];
+      for (const row of [
+        ...payload.records,
+        ...payload.exercises,
+        ...payload.weights,
+      ]) {
         if (!row.photoPath) continue;
         const result = await client.storage
           .from(BUCKET)
@@ -33,7 +38,12 @@ export function createJournalStore(client, userId) {
     },
     async save(value) {
       const payload = structuredClone(value);
-      for (const row of [...payload.records, ...payload.exercises]) {
+      payload.weights ??= [];
+      for (const row of [
+        ...payload.records,
+        ...payload.exercises,
+        ...payload.weights,
+      ]) {
         if (row.photo?.startsWith("data:")) {
           const blob = await (await fetch(row.photo)).blob();
           const hash = Array.from(
@@ -72,10 +82,16 @@ export function createJournalStore(client, userId) {
           { cause: error },
         );
       revision = data.revision;
-      for (const row of [...value.records, ...value.exercises]) {
-        const saved = [...payload.records, ...payload.exercises].find(
-          (r) => r.id === row.id,
-        );
+      for (const row of [
+        ...value.records,
+        ...value.exercises,
+        ...(value.weights || []),
+      ]) {
+        const saved = [
+          ...payload.records,
+          ...payload.exercises,
+          ...payload.weights,
+        ].find((r) => r.id === row.id);
         if (saved?.photoPath) row.photoPath = saved.photoPath;
       }
       // No deletion here: concurrent uploads must never be removed by another tab.

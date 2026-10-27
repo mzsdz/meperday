@@ -712,10 +712,14 @@ main {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+.form-grid.single-field {
+  grid-template-columns: minmax(0, 1fr);
+}
 .field {
+  min-width: 0;
   margin: 12px 0;
 }
 .field label {
@@ -729,19 +733,33 @@ main {
 .field select,
 .field textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid #e0e6df;
   border-radius: 12px;
   background: white;
   padding: 12px;
   color: #313e36;
   outline-color: #92b49c;
-  font-size: 14px;
+  font-size: 16px;
+}
+.field input[type="date"],
+.field input[type="time"] {
+  display: block;
+  min-height: 48px;
 }
 .field textarea {
   resize: vertical;
   min-height: 60px;
 }
 .uploadbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
   border: 1.5px dashed #bfcfc2;
   background: #f2f7f2;
   border-radius: 17px;
@@ -755,13 +773,15 @@ main {
   display: none;
 }
 .uploadbox .big {
+  display: block;
+  line-height: 1.2;
   font-size: 28px;
 }
 .uploadbox strong {
   display: block;
   color: #496958;
   font-size: 13px;
-  margin: 8px;
+  margin: 0;
 }
 .uploadbox small {
   display: block;

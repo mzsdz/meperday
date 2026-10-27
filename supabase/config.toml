@@ -2,4 +2,4 @@ project_id = "meperday"
 
 [auth]
 site_url = "https://meperday-mzsdz.vercel.app"
-additional_redirect_urls = ["https://meperday-mzsdz.vercel.app", "https://meperday-git-feat-persistent-mvp-mzsdz.vercel.app", "https://meperday-6gnevzlok-mzsdz.vercel.app", "http://127.0.0.1:5173", "http://127.0.0.1:4180"]
+additional_redirect_urls = ["https://meperday.vercel.app", "https://meperday-mzsdz.vercel.app", "https://meperday-git-feat-persistent-mvp-mzsdz.vercel.app", "https://meperday-6gnevzlok-mzsdz.vercel.app", "http://127.0.0.1:5173", "http://127.0.0.1:4180"]

@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   use: {
-    channel: process.env.CI ? undefined : "msedge",
+    channel: process.env.CI ? "chrome" : "msedge",
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 390, height: 844 },
   },

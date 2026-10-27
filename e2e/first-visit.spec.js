@@ -1,4 +1,13 @@
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  await page.route("https://example.supabase.co/auth/v1/settings", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ external: { google: false } }),
+    }),
+  );
+});
 test("expired login callback preserves device records and offers a new link", async ({
   page,
 }) => {

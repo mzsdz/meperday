@@ -83,3 +83,12 @@ export function createJournalStore(client, userId) {
     },
   };
 }
+export async function googleEnabled() {
+  if (!cloud) return false;
+  const response = await fetch(new URL("/auth/v1/settings", url), {
+    headers: { apikey: key },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw Error("Google 로그인 설정을 확인하지 못했어요.");
+  return (await response.json()).external?.google === true;
+}

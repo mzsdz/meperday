@@ -1,23 +1,26 @@
 import { generateText, Output } from "ai";
 import { createClient } from "@supabase/supabase-js";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { foodSchema, exerciseSchema } from "../server/analysis-schema.js";
-export function aiConfigured(env = process.env) {
-  return Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN);
+export async function aiConfigured(env = process.env, resolveOidc = getVercelOidcToken) {
+  if (env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN) return true;
+  try { return Boolean(await resolveOidc()); } catch { return false; }
 }
 export function createAnalysisHandler({
   env = process.env,
   generate = generateText,
   clientFactory = createClient,
+  resolveOidc = getVercelOidcToken,
 } = {}) {
   return async function handler(req, res) {
     res.setHeader("Cache-Control", "no-store");
     if (req.method === "GET")
       return res
         .status(200)
-        .json({ configured: aiConfigured(env), requiresLogin: true });
+        .json({ configured: await aiConfigured(env, resolveOidc), requiresLogin: true });
     if (req.method !== "POST")
       return res.status(405).json({ error: "POST 요청만 허용합니다." });
-    if (!aiConfigured(env))
+    if (!(await aiConfigured(env, resolveOidc)))
       return res.status(503).json({
         error:
           "AI 연결 설정이 아직 완료되지 않았어요. 수동 기록은 계속 사용할 수 있어요.",

@@ -1,0 +1,5 @@
+project_id = "meperday"
+
+[auth]
+site_url = "https://meperday-git-feat-persistent-mvp-mzsdz.vercel.app"
+additional_redirect_urls = ["https://meperday-git-feat-persistent-mvp-mzsdz.vercel.app", "https://meperday-6gnevzlok-mzsdz.vercel.app", "http://127.0.0.1:5173", "http://127.0.0.1:4180"]

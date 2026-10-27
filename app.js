@@ -1,4 +1,5 @@
 import { analyzePhoto } from "./analysis-client.js";
+import { loadPoints } from "./points.js";
 import exifr from "exifr";
 import { compressImage } from "./photos.js";
 import {
@@ -233,6 +234,7 @@ import {
     return {
       records: [],
       exercises: [],
+      weights: [],
       evaluations: {},
       dayEvaluations: {},
       goals: { ...GOALS_DEFAULT },
@@ -250,12 +252,15 @@ import {
       data = seed();
     }
   }
+  data.weights ??= [];
   let selected = TODAY,
     view = "day",
     overlayOpen = false,
     recOffset = 0;
   const $ = (s) => document.querySelector(s);
   let loadedUserId = null,
+    pointsState = null,
+    pointsUnavailable = false,
     aiReady = false,
     refreshPhotoAnalysis = () => {};
   function updateAnalysisButton(button, state, kind) {
@@ -271,8 +276,8 @@ import {
       : !aiReady
         ? "AI 연결 준비 중"
         : kind === "food"
-          ? "✦ 사진 AI 분석"
-          : "✦ 운동 캡처 분석";
+          ? "✦ 사진 AI 분석 · 무료"
+          : "✦ 운동 캡처 분석 · 무료";
   }
   fetch("/api/analyze")
     .then((r) => (r.ok ? r.json() : {}))
@@ -310,6 +315,7 @@ import {
         await store.save(data);
       } else localStorage.setItem(KEY, JSON.stringify(data));
       committed = structuredClone(data);
+      if (store) void refreshPoints();
       return true;
     } catch (error) {
       data = structuredClone(committed);
@@ -340,6 +346,13 @@ import {
   }
   function exercisesOn(date) {
     return data.exercises.filter((e) => e.date === date);
+  }
+  function hasRecordsOn(date) {
+    return (
+      recordsOn(date).length ||
+      exercisesOn(date).length ||
+      data.weights.some((r) => r.date === date)
+    );
   }
   function total(rows) {
     return rows.reduce((a, r) => a + (Number(r.kcal) || 0), 0);
@@ -409,7 +422,11 @@ import {
     let base = rows.length
       ? `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-line"><div class="cal-big">${knownKcal ? fmtInt(cal) : "—"}<span> kcal${unknownKcal && knownKcal ? " + 미확인" : ""}</span></div></div><div class="hint" style="margin-top:6px">기록된 식사 기준 · 추정치 포함${unknownKcal ? " · 열량 미확인 기록 있음" : ""} <button class="text-button" id="dayEvalButton">${data.dayEvaluations[selected] ? "하루 느낌 수정" : "하루 느낌 기록 (선택)"}</button></div></div>`
       : `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-big">— <span>kcal</span></div><div class="hint">아직 이 날의 식사 기록이 없어요</div></div>`;
-    return `<div class="date-nav"><button class="ghost-date" id="goToday">${selected === TODAY ? "오늘" : "오늘로 이동"}</button><strong class="date-title">${fmtDay(selected)}</strong><div class="date-arrows"><button data-day-shift="-1" aria-label="이전 날">‹</button><button data-day-shift="1" aria-label="다음 날">›</button></div></div>${base}${!rows.length ? `<div class="card empty"><div><h3>사진 한 장이면 충분해</h3><p>나머지는 원할 때만 기록해요.</p></div><button class="button" data-add="food">사진 올리기</button></div>` : ""}<div class="section-header"><h2>식사</h2><span class="subtle">누르면 상세 기록</span></div><div class="meal-list">${mealHTML}</div><div class="section-header"><h2>운동 기록</h2><button class="text-button" data-add="exercise">+ 운동 추가</button></div>${exercise.length ? `<div class="card activity-list">${exercise.map((e) => `<button class="item-row" style="border:0;background:white;width:100%;text-align:left" data-exercise="${e.id}"><div><strong>🏃 ${esc(e.type)}</strong><small>${e.minutes ? `${e.minutes}분` : ""}${e.calories ? ` · ${e.calories}kcal(운동앱 추정)` : ""}</small></div><span>›</span></button>`).join("")}</div>` : `<button class="action-card" data-add="exercise"><span class="action-icon">⌁</span><div><strong>운동 앱 캡처 올리기</strong><small>운동 종류 · 시간 · 소모 열량 (선택)</small></div><span class="chevron" style="margin-left:auto">›</span></button>`}${rows.length ? `<div class="card nutrients-card" style="margin-top:15px"><div class="line-action"><strong>${selected === TODAY ? "오늘의 영양소" : "이 날의 영양소"}</strong><span class="muted micro">하루 기준 대비</span></div>${showNutrition(rows)}<div class="nutrient-note">검은 선 = 설정한 하루 기준 100% · 막대는 145%까지 표시<br>추정 영양정보만 합산하며, 일부 음식의 영양소는 알 수 없어요.</div></div><div class="card"><div class="line-action" style="margin-bottom:15px"><strong>주의가 필요한 항목</strong><span class="muted micro">섭취 상한과 비교</span></div>${showNutrition(rows, "warning")}<div class="nutrient-note">나트륨·포화지방은 100%를 채우는 목표가 아니라 가급적 넘지 않을 상한이에요.</div></div>` : ""}<button class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지? ✨</strong><small>오늘의 영양 상태와 내 입맛을 함께 고려해요</small></span><span>›</span></button>${rows.some((r) => r.sample) ? '<p class="record-note">일부 기록은 이전 대화에서 옮긴 <b>추정치</b>예요. 수정·삭제할 수 있어요.</p>' : ""}`;
+    return `<div class="date-nav"><button class="ghost-date" id="goToday">${selected === TODAY ? "오늘" : "오늘로 이동"}</button><strong class="date-title">${fmtDay(selected)}</strong><div class="date-arrows"><button data-day-shift="-1" aria-label="이전 날">‹</button><button data-day-shift="1" aria-label="다음 날">›</button></div></div>${base}${!rows.length ? `<div class="card empty"><div><h3>사진 한 장이면 충분해</h3><p>나머지는 원할 때만 기록해요.</p></div><button class="button" data-add="food">사진 올리기</button></div>` : ""}<div class="section-header"><h2>식사</h2><span class="subtle">누르면 상세 기록</span></div><div class="meal-list">${mealHTML}</div><div class="section-header"><h2>운동 기록</h2><button class="text-button" data-add="exercise">+ 운동 추가</button></div>${exercise.length ? `<div class="card activity-list">${exercise.map((e) => `<button class="item-row" style="border:0;background:white;width:100%;text-align:left" data-exercise="${e.id}"><div><strong>🏃 ${esc(e.type)}</strong><small>${e.minutes ? `${e.minutes}분` : ""}${e.calories ? ` · ${e.calories}kcal(운동앱 추정)` : ""}</small></div><span>›</span></button>`).join("")}</div>` : `<button class="action-card" data-add="exercise"><span class="action-icon">⌁</span><div><strong>운동 앱 캡처 올리기</strong><small>운동 종류 · 시간 · 소모 열량 (선택)</small></div><span class="chevron" style="margin-left:auto">›</span></button>`}${renderWeights()}${rows.length ? `<div class="card nutrients-card" style="margin-top:15px"><div class="line-action"><strong>${selected === TODAY ? "오늘의 영양소" : "이 날의 영양소"}</strong><span class="muted micro">하루 기준 대비</span></div>${showNutrition(rows)}<div class="nutrient-note">검은 선 = 설정한 하루 기준 100% · 막대는 145%까지 표시<br>추정 영양정보만 합산하며, 일부 음식의 영양소는 알 수 없어요.</div></div><div class="card"><div class="line-action" style="margin-bottom:15px"><strong>주의가 필요한 항목</strong><span class="muted micro">섭취 상한과 비교</span></div>${showNutrition(rows, "warning")}<div class="nutrient-note">나트륨·포화지방은 100%를 채우는 목표가 아니라 가급적 넘지 않을 상한이에요.</div></div>` : ""}<button class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지? ✨</strong><small>오늘의 영양 상태와 내 입맛을 함께 고려해요</small></span><span>›</span></button>${rows.some((r) => r.sample) ? '<p class="record-note">일부 기록은 이전 대화에서 옮긴 <b>추정치</b>예요. 수정·삭제할 수 있어요.</p>' : ""}`;
+  }
+  function renderWeights() {
+    const rows = data.weights.filter((r) => r.date === selected);
+    return `<div class="section-header"><h2>몸무게 인증</h2><button type="button" class="text-button" data-add="weight">+ 인증 추가</button></div>${rows.length ? `<div class="card activity-list">${rows.map((r) => `<button type="button" class="weight-row" data-weight="${esc(r.id)}"><span class="thumb">${r.photo ? `<img src="${esc(r.photo)}" alt="몸무게 인증 사진">` : "⚖️"}</span><span><strong>${r.kg == null ? "몸무게 인증" : `${esc(r.kg)} kg`}</strong><small>${esc(r.time || "사진으로 남긴 기록")}</small></span><span class="chevron">›</span></button>`).join("")}</div>` : '<button type="button" class="action-card" data-add="weight"><span class="action-icon">⚖️</span><span><strong>체중계 사진 남기기</strong><small>사진 한 장이면 완료 · 몸무게 입력은 선택</small></span><span class="chevron">›</span></button>'}`;
   }
   function weekStart(s) {
     let d = dateObj(s);
@@ -491,11 +508,11 @@ import {
     return `<div class="date-nav"><button class="ghost-date" id="goToday">이번 달</button><strong class="date-title">${year}년 ${month + 1}월</strong><div class="date-arrows"><button data-month-shift="-1">‹</button><button data-month-shift="1">›</button></div></div><div class="card"><div class="month-grid">${DAY.map((l) => `<span class="month-head">${l}</span>`).join("")}${prev}${days
       .map((x) => {
         let n = total(recordsOn(x));
-        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${recordsOn(x).length ? `<span class="dot" style="background:${n > data.goals.kcal * 1.2 ? "#d98b70" : "#75ab85"}"></span>` : '<span style="height:5px"></span>'}</button>`;
+        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:${n > data.goals.kcal * 1.2 ? "#d98b70" : "#75ab85"}"></span>` : '<span style="height:5px"></span>'}</button>`;
       })
       .join(
         "",
-      )}</div><div class="chart-note">초록 점은 식사 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => recordsOn(x).length).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
+      )}</div><div class="chart-note">초록 점은 식사·운동·몸무게 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => hasRecordsOn(x)).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
       .map((x) => {
         let n = total(recordsOn(x));
         return `<div class="bar-col" style="height:140px;justify-content:end;gap:0"><div class="bar-wrap" style="height:110px"><div class="bar ${x === selected ? "on" : ""}" style="width:85%;height:${n ? Math.round((n / max) * 100) : 2}%"></div></div>${dateObj(x).getDate() % 5 === 0 ? `<span class="label" style="font-size:8px">${dateObj(x).getDate()}</span>` : '<span class="label" style="font-size:8px;opacity:0">-</span>'}</div>`;
@@ -521,7 +538,9 @@ import {
     $("#statsBtn").classList.toggle("active", view === "week");
     $("#calendarBtn").classList.toggle("active", view === "month");
     document
-      .querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton")
+      .querySelectorAll(
+        "#modeSwitch button,.bottom-nav button,#settingsButton,#pointsButton",
+      )
       .forEach((button) => (button.disabled = accountPending));
   }
   let priorFocus = null;
@@ -807,11 +826,66 @@ import {
         toast("음식 기록을 삭제했어");
       };
   }
+  function showWeightForm(r = null) {
+    const state = { photo: r?.photo || "", processing: false };
+    showSheet(
+      `${head(r ? "몸무게 인증 수정" : "몸무게 인증", "체중계 사진 한 장이면 완료예요. 몸무게 수치는 원할 때만 적어요.")}<form id="weightForm"><div class="form-grid ${r ? "" : "single-field"}"><div class="field"><label for="weightDate">날짜</label><input id="weightDate" type="date" required value="${esc(r?.date || selected)}"></div>${r ? `<div class="field"><label for="weightTime">촬영 시각 · 선택</label><input id="weightTime" type="time" value="${esc(r.time || "")}"></div>` : '<input id="weightTime" type="hidden" value="">'}</div><label class="uploadbox" for="weightFile"><span class="big">⚖️</span><strong>체중계 사진 선택하기</strong><small>다른 사람에게 공개되지 않아요</small><input id="weightFile" type="file" accept="image/*"></label><div id="weightPhotoPreview">${state.photo ? `<img class="upload-preview" src="${esc(state.photo)}" alt="몸무게 인증 사진">` : ""}</div><div class="field"><label for="weightKg">몸무게 (kg) · 선택</label><input id="weightKg" type="number" min="0.1" max="1000" step="any" inputmode="decimal" value="${r?.kg ?? ""}" placeholder="사진만 저장해도 돼요"></div><div class="field"><label for="weightNote">메모 · 선택</label><textarea id="weightNote" placeholder="원할 때만 남겨요">${esc(r?.note || "")}</textarea></div><p id="weightStatus" class="disclaimer" role="status">사진을 보관하는 인증 기록이에요. 사진에서 몸무게를 추측하거나 검증하지 않아요.</p><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${r ? "수정 저장" : "인증 저장"}</button></div>${r ? '<button type="button" class="text-button full" id="deleteWeight">이 인증 기록 삭제</button>' : ""}</form>`,
+    );
+    bindPhotoInput({
+      input: "#weightFile",
+      form: "#weightForm",
+      preview: "#weightPhotoPreview",
+      time: "#weightTime",
+      state,
+    });
+    $("#weightForm").onsubmit = async (e) => {
+      e.preventDefault();
+      if (state.processing) return;
+      if (!state.photo) {
+        $("#weightStatus").textContent =
+          "체중계 사진 한 장을 선택해 주세요. 몸무게 수치는 비워 두어도 돼요.";
+        return;
+      }
+      const kg =
+        $("#weightKg").value.trim() === ""
+          ? null
+          : Number($("#weightKg").value);
+      if (kg !== null && (!Number.isFinite(kg) || kg <= 0 || kg > 1000)) return;
+      const record = {
+        id: r?.id || uid(),
+        date: $("#weightDate").value,
+        time: $("#weightTime").value,
+        kg,
+        note: $("#weightNote").value.trim(),
+        photo: state.photo,
+        ...(r?.photoPath ? { photoPath: r.photoPath } : {}),
+      };
+      if (r)
+        data.weights = data.weights.map((x) => (x.id === r.id ? record : x));
+      else data.weights.push(record);
+      if (!(await save())) return;
+      selected = record.date;
+      closeSheet();
+      view = "day";
+      render();
+      toast("몸무게 인증을 저장했어요.");
+    };
+    if (r)
+      $("#deleteWeight").onclick = async () => {
+        if (!confirm("이 몸무게 인증 기록을 삭제할까요? 적립 이력은 유지돼요."))
+          return;
+        data.weights = data.weights.filter((x) => x.id !== r.id);
+        if (!(await save())) return;
+        closeSheet();
+        render();
+        toast("몸무게 인증 기록을 삭제했어요.");
+      };
+  }
   function bindPhotoInput({ input, form, preview, analyze, time, state }) {
     const picker = $(input),
       formEl = $(form),
       target = $(preview),
-      analyzeButton = $(analyze),
+      analyzeButton = analyze ? $(analyze) : null,
       timeField = time ? $(time) : null;
     const submit = formEl.querySelector('button[type="submit"]');
     const message = document.createElement("p");
@@ -820,7 +894,8 @@ import {
     target.after(message);
     const kind = form === "#foodForm" ? "food" : "exercise";
     const refresh = () => {
-      if (formEl.isConnected) updateAnalysisButton(analyzeButton, state, kind);
+      if (formEl.isConnected && analyzeButton)
+        updateAnalysisButton(analyzeButton, state, kind);
     };
     refreshPhotoAnalysis = refresh;
     refresh();
@@ -831,7 +906,7 @@ import {
       const request = ++sequence;
       state.processing = true;
       submit.disabled = true;
-      analyzeButton.disabled = true;
+      if (analyzeButton) analyzeButton.disabled = true;
       message.textContent = "사진을 준비하고 있어요…";
       try {
         const [photo, tags] = await Promise.all([
@@ -1124,6 +1199,54 @@ import {
       showRecs();
     };
   }
+  let pointsReadVersion = 0;
+  async function refreshPoints() {
+    const connected = store,
+      version = ++pointsReadVersion;
+    if (!connected) {
+      pointsState = null;
+      return;
+    }
+    try {
+      const result = await loadPoints(cloud);
+      if (store !== connected || version !== pointsReadVersion) return;
+      pointsState = result;
+      pointsUnavailable = false;
+      $("#pointsButton").textContent = `${fmtInt(result.balance)}P`;
+    } catch {
+      if (store !== connected || version !== pointsReadVersion) return;
+      pointsUnavailable = true;
+      $("#pointsButton").textContent = "포인트 확인";
+    }
+  }
+  async function showPoints() {
+    showSheet(
+      `${head("내 포인트", "가볍게 남긴 기록이 차곡차곡 쌓여요.")}<div id="pointsContent" role="status">포인트를 불러오고 있어요…</div>`,
+    );
+    const content = $("#pointsContent");
+    if (!store) {
+      content.innerHTML =
+        '<p class="hint">로그인 후 계정에 처음 저장하는 끼니·운동·몸무게 기록에 포인트가 적립돼요. 이 기기의 기록은 그대로 사용할 수 있어요.</p><p class="disclaimer">아침·점심·저녁·운동·몸무게 각각 하루 한 번 200P · 하루 최대 1,000P</p><p class="disclaimer">AI 분석은 포인트를 사용하지 않아요.</p><button type="button" class="button full" id="signIn">계정에 로그인하기</button>';
+      return;
+    }
+    await refreshPoints();
+    if (!content.isConnected) return;
+    if (pointsUnavailable || !pointsState) {
+      content.innerHTML =
+        '<p class="hint">포인트 내역을 불러오지 못했어요. 저장한 기록은 그대로 보관돼요.</p><button type="button" class="button secondary full" id="pointsRetry">다시 확인</button>';
+      $("#pointsRetry").onclick = showPoints;
+      return;
+    }
+    const labels = {
+      breakfast: "아침",
+      lunch: "점심",
+      dinner: "저녁",
+      exercise: "운동",
+      weight: "몸무게",
+    };
+    const p = pointsState;
+    content.innerHTML = `<div class="points-balance"><span class="eyebrow">보유 포인트</span><strong id="pointsBalance">${fmtInt(p.balance)}<small>P</small></strong></div><p id="pointsToday" class="points-today">오늘 적립 ${fmtInt(p.todayEarned)} / 1,000P</p><p class="disclaimer">아침·점심·저녁·운동·몸무게 각각 하루 한 번 200P. 한국 시간 기준 하루 최대 1,000P예요. 식사·운동은 사진만 또는 직접 기록해도 적립되고, 몸무게는 체중계 사진으로 인증해요.</p><p class="disclaimer">같은 날짜·같은 끼니·운동·몸무게는 삭제 후 다시 등록해도 중복 적립되지 않아요. 수정으로 다시 적립되지 않으며, 이미 받은 포인트는 유지돼요.</p><p class="points-free">AI 칼로리·영양소 분석과 운동 캡처 분석은 무료예요. 포인트를 차감하지 않아요.</p><h3>최근 적립 내역</h3><ul class="points-history">${p.history.length ? p.history.map((r) => `<li><span><strong>${labels[r.slot] || "기록"} 기록</strong><small>${esc(r.earned_on)} 적립${r.record_date !== r.earned_on ? ` · ${esc(r.record_date)} 기록` : ""}</small></span><b>+200P</b></li>`).join("") : '<li class="hint">아직 적립 내역이 없어요.</li>'}</ul><p class="disclaimer">기존 기록은 소급 적립되지 않아요. 현재는 포인트 적립과 내역 조회를 제공해요.</p>`;
+  }
   function showSettings() {
     showSheet(
       `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
@@ -1135,16 +1258,20 @@ import {
     if (
       store &&
       device &&
-      (device.records?.length || device.exercises?.length)
+      (device.records?.length ||
+        device.exercises?.length ||
+        device.weights?.length)
     ) {
       $("#sheetContent").insertAdjacentHTML(
         "beforeend",
-        `<button type="button" class="button secondary full" id="importDevice">이 기기 기록 ${device.records.length + device.exercises.length}개를 계정에 가져오기</button><p class="disclaimer">계정 기록은 유지하고 기기에만 있는 기록을 추가해요.</p>`,
+        `<button type="button" class="button secondary full" id="importDevice">이 기기 기록 ${(device.records?.length || 0) + (device.exercises?.length || 0) + (device.weights?.length || 0)}개를 계정에 가져오기</button><p class="disclaimer">계정 기록은 유지하고 기기에만 있는 기록을 추가해요.</p>`,
       );
       $("#importDevice").onclick = async () => {
-        for (const kind of ["records", "exercises"]) {
+        for (const kind of ["records", "exercises", "weights"]) {
           const ids = new Set(data[kind].map((row) => row.id));
-          data[kind].push(...device[kind].filter((row) => !ids.has(row.id)));
+          data[kind].push(
+            ...(device[kind] || []).filter((row) => !ids.has(row.id)),
+          );
         }
         data.evaluations = { ...device.evaluations, ...data.evaluations };
         data.dayEvaluations = {
@@ -1170,7 +1297,11 @@ import {
     };
     $("#exportData").onclick = async () => {
       const backup = structuredClone(data);
-      for (const row of [...backup.records, ...backup.exercises]) {
+      for (const row of [
+        ...backup.records,
+        ...backup.exercises,
+        ...backup.weights,
+      ]) {
         if (row.photoPath) {
           const result = await cloud.storage
             .from("meday-photos")
@@ -1243,6 +1374,10 @@ import {
       showLogin();
       return;
     }
+    if (button.id === "pointsButton") {
+      void showPoints();
+      return;
+    }
     if (button.id === "retryAccount") {
       if (
         overlayOpen &&
@@ -1310,6 +1445,15 @@ import {
     }
     if (button.dataset.add === "exercise") {
       showExerciseForm();
+      return;
+    }
+    if (button.dataset.add === "weight") {
+      showWeightForm();
+      return;
+    }
+    if (button.dataset.weight) {
+      const r = data.weights.find((x) => x.id === button.dataset.weight);
+      if (r) showWeightForm(r);
       return;
     }
     if (button.dataset.edit) {
@@ -1412,6 +1556,7 @@ import {
     accountPending = false;
     committed = structuredClone(data);
     status.textContent = "내 계정 · 서버 저장";
+    void refreshPoints();
     closeSheet();
     render();
     // Refresh expiring private image URLs when idle; do not replace an open form.

@@ -35,7 +35,19 @@ export function validateJournal(value) {
     !value.dayEvaluations
   )
     throw Error("백업 구조를 확인해 주세요.");
-  for (const rows of [value.records, value.exercises])
+  value.weights ??= [];
+  if (!Array.isArray(value.weights))
+    throw Error("몸무게 기록 형식을 확인해 주세요.");
+  for (const row of value.weights)
+    if (
+      row.kg != null &&
+      (typeof row.kg !== "number" ||
+        !Number.isFinite(row.kg) ||
+        row.kg <= 0 ||
+        row.kg > 1000)
+    )
+      throw Error("몸무게 수치를 확인해 주세요.");
+  for (const rows of [value.records, value.exercises, value.weights])
     for (const row of rows) {
       if (
         !row ||
@@ -52,8 +64,8 @@ export function validateJournal(value) {
         throw Error("백업 사진 형식이 올바르지 않습니다.");
       delete row.photoPath;
     }
-  for (const value of Object.values(value.goals))
-    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0)
+  for (const goal of Object.values(value.goals))
+    if (typeof goal !== "number" || !Number.isFinite(goal) || goal <= 0)
       throw Error("기준량을 확인해 주세요.");
   return value;
 }

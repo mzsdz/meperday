@@ -1,5 +1,11 @@
 import { defineConfig } from "vite";
 export default defineConfig({
+  // The two browser-test servers have different auth environments. Sharing
+  // optimizer output can trigger a reload while a user flow is in progress.
+  cacheDir: process.env.VITE_SUPABASE_URL
+    ? "node_modules/.vite-account"
+    : "node_modules/.vite-local",
+  optimizeDeps: { include: ["@supabase/supabase-js", "exifr"] },
   plugins: [
     {
       name: "social-metadata",
@@ -27,3 +33,4 @@ export default defineConfig({
     },
   ],
 });
+

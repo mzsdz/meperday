@@ -1,16 +1,34 @@
 import { defineConfig } from "@playwright/test";
+const chromiumUse = { channel: process.env.CI ? "chrome" : "msedge" };
 export default defineConfig({
   testDir: "./e2e",
   projects: [
-    { name: "local", testMatch: "journal.spec.js" },
+    { name: "local", testMatch: "journal.spec.js", use: chromiumUse },
+    {
+      name: "upload-layout",
+      testMatch: "upload-layout.spec.js",
+      use: chromiumUse,
+    },
+    ...(process.env.PLAYWRIGHT_WEBKIT
+      ? [
+          {
+            name: "webkit-upload",
+            testMatch: "upload-layout.spec.js",
+            use: {
+              browserName: "webkit",
+              isMobile: true,
+              hasTouch: true,
+            },
+          },
+        ]
+      : []),
     {
       name: "configured-guest",
       testMatch: "first-visit.spec.js",
-      use: { baseURL: "http://127.0.0.1:4174" },
+      use: { ...chromiumUse, baseURL: "http://127.0.0.1:4174" },
     },
   ],
   use: {
-    channel: process.env.CI ? "chrome" : "msedge",
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 390, height: 844 },
   },

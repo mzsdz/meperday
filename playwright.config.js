@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   projects: [
     { name: "local", testMatch: "journal.spec.js", use: chromiumUse },
+    { name: "iphone-flow", testMatch: "iphone-flow.spec.js", use: chromiumUse },
     {
       name: "upload-layout",
       testMatch: "upload-layout.spec.js",
@@ -13,11 +14,25 @@ export default defineConfig({
       ? [
           {
             name: "webkit-upload",
-            testMatch: "upload-layout.spec.js",
+            testMatch: ["upload-layout.spec.js", "iphone-flow.spec.js"],
             use: {
               browserName: "webkit",
               isMobile: true,
               hasTouch: true,
+            },
+          },
+        ]
+      : []),
+    ...(process.env.PLAYWRIGHT_WEBKIT
+      ? [
+          {
+            name: "webkit-auth",
+            testMatch: "first-visit.spec.js",
+            use: {
+              browserName: "webkit",
+              isMobile: true,
+              hasTouch: true,
+              baseURL: "http://127.0.0.1:4174",
             },
           },
         ]

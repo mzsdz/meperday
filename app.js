@@ -1,5 +1,6 @@
 import exifr from "exifr";
-import { cloud, createJournalStore } from "./cloud.js";
+import { compressImage } from "./photos.js";
+import { cloud, createJournalStore, loginLinkError } from "./cloud.js";
 import {
   captureTime,
   calorieSummary,
@@ -248,6 +249,22 @@ import {
     overlayOpen = false,
     recOffset = 0;
   const $ = (s) => document.querySelector(s);
+  let loadedUserId = null;
+  function updateViewport() {
+    const viewport = window.visualViewport;
+    document.documentElement.style.setProperty(
+      "--viewport-height",
+      `${viewport?.height || window.innerHeight}px`,
+    );
+    document.documentElement.style.setProperty(
+      "--viewport-top",
+      `${viewport?.offsetTop || 0}px`,
+    );
+  }
+  updateViewport();
+  window.visualViewport?.addEventListener("resize", updateViewport);
+  window.visualViewport?.addEventListener("scroll", updateViewport);
+  window.addEventListener("resize", updateViewport);
   async function save() {
     if (busy) return false;
     busy = true;
@@ -457,8 +474,9 @@ import {
       )}</div><div class="chart-note">기록이 없는 날의 칼로리는 알 수 없어요.</div></div>`;
   }
   function render() {
-    $("#main").innerHTML =
-      view === "day"
+    $("#main").innerHTML = accountPending
+      ? '<div class="card" role="status"><h3>계정 기록 연결 중</h3><p class="disclaimer">연결이 끝나면 기록을 표시해요. 연결 오류는 상단에서 다시 연결할 수 있어요.</p></div>'
+      : view === "day"
         ? renderDay()
         : view === "week"
           ? renderWeek()
@@ -471,6 +489,9 @@ import {
     $("#homeBtn").classList.toggle("active", view === "day");
     $("#statsBtn").classList.toggle("active", view === "week");
     $("#calendarBtn").classList.toggle("active", view === "month");
+    document
+      .querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton")
+      .forEach((button) => (button.disabled = accountPending));
   }
   let priorFocus = null;
   function closeSheet() {
@@ -505,6 +526,16 @@ import {
       }
     };
   }
+  function showLoginReturnError() {
+    history.replaceState(null, "", location.pathname + location.search);
+    showLogin();
+    $("#authStatus").textContent =
+      "로그인 링크가 만료되었거나 이미 사용됐어요. 새 로그인 링크를 받아 주세요. 기기 기록은 그대로 남아 있어요.";
+  }
+  window.addEventListener("hashchange", () => {
+    if (cloud && new URLSearchParams(location.hash.slice(1)).has("error"))
+      showLoginReturnError();
+  });
   function showSheet(html) {
     priorFocus = document.activeElement;
     overlayOpen = true;
@@ -586,24 +617,18 @@ import {
     showSheet(
       `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><div class="field"><label for="foodMeal">구분</label><select id="foodMeal">${MEALS.map(([k, l]) => `<option value="${k}" ${meal === k ? "selected" : ""}>${l}</option>`).join("")}</select></div><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석 (서버 연결 시)</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">AI 연결이 없어도 사진과 간단한 입력만으로 기록할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
     );
-    $("#foodFile").addEventListener("change", async (e) => {
-      let f = e.target.files[0];
-      if (!f) return;
-      try {
-        const tags = await exifr
-          .parse(f, { pick: ["DateTimeOriginal"], reviveValues: false })
-          .catch(() => null);
-        $("#foodTime").value = captureTime(tags);
-        state.photo = await compressImage(f);
-        $("#photoPreview").innerHTML =
-          `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">`;
-        $("#foodAnalyze").disabled = false;
-      } catch (err) {
-        toast("사진을 읽지 못했어. 다른 사진으로 다시 시도해줘.");
-      }
+    bindPhotoInput({
+      input: "#foodFile",
+      form: "#foodForm",
+      preview: "#photoPreview",
+      analyze: "#foodAnalyze",
+      time: "#foodTime",
+      state,
     });
+    const foodAnalysisForm = $("#foodForm");
     $("#foodAnalyze").addEventListener("click", async () => {
       if (!state.photo) return;
+      const analyzedPhoto = state.photo;
       let b = $("#foodAnalyze");
       b.disabled = true;
       b.textContent = "사진을 분석하고 있어요…";
@@ -616,6 +641,8 @@ import {
           body: JSON.stringify({ kind: "food", image: state.photo }),
         });
         let j = await res.json();
+        if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
+          return;
         if (!res.ok) throw Error(j.error || "서버 연결 실패");
         state.analysis = j;
         $("#foodName").value = j.name || "";
@@ -628,6 +655,8 @@ import {
           "AI 추정값이 채워졌어요. 실제 먹은 양에 맞게 수정할 수 있어요.";
         toast("AI 분석 결과를 가져왔어요.");
       } catch (e) {
+        if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
+          return;
         $("#analyzeStatus").textContent =
           (e.message || "AI 분석을 사용할 수 없어요.") +
           " · 아래에서 직접 입력하면 저장할 수 있어요.";
@@ -649,6 +678,10 @@ import {
     );
     $("#foodForm").onsubmit = async (e) => {
       e.preventDefault();
+      if (state.processing) {
+        toast("사진 처리가 끝난 뒤 저장해 주세요.");
+        return;
+      }
       let name = $("#foodName").value.trim() || "음식 사진 (분석 전)",
         kcal =
           $("#foodKcal").value.trim() === ""
@@ -679,6 +712,7 @@ import {
         nutrients,
         photo: state.photo,
         photoPath: r?.photoPath,
+        analysis: state.analysis,
         emoji: r?.emoji || "🍽️",
         source: state.analysis
           ? "AI 추정 + 사용자 확인"
@@ -711,28 +745,60 @@ import {
         toast("음식 기록을 삭제했어");
       };
   }
-  async function compressImage(file) {
-    if (!file.type.startsWith("image/")) throw Error("not image");
-    let uri = await new Promise((resolve, reject) => {
-      let fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-    return await new Promise((resolve, reject) => {
-      let img = new Image();
-      img.onload = () => {
-        let scale = Math.min(1, 960 / Math.max(img.width, img.height));
-        let cn = document.createElement("canvas");
-        cn.width = Math.max(1, Math.round(img.width * scale));
-        cn.height = Math.max(1, Math.round(img.height * scale));
-        let ctx = cn.getContext("2d");
-        ctx.drawImage(img, 0, 0, cn.width, cn.height);
-        resolve(cn.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = reject;
-      img.src = uri;
-    });
+  function bindPhotoInput({ input, form, preview, analyze, time, state }) {
+    const picker = $(input),
+      formEl = $(form),
+      target = $(preview),
+      analyzeButton = $(analyze),
+      timeField = time ? $(time) : null;
+    const submit = formEl.querySelector('button[type="submit"]');
+    const message = document.createElement("p");
+    message.className = "disclaimer";
+    message.setAttribute("role", "status");
+    target.after(message);
+    let sequence = 0;
+    picker.onchange = async () => {
+      const file = picker.files[0];
+      if (!file) return;
+      const request = ++sequence;
+      state.processing = true;
+      submit.disabled = true;
+      analyzeButton.disabled = true;
+      message.textContent = "사진을 준비하고 있어요…";
+      try {
+        const [photo, tags] = await Promise.all([
+          compressImage(file),
+          time
+            ? exifr
+                .parse(file, {
+                  pick: ["DateTimeOriginal"],
+                  reviveValues: false,
+                })
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        if (request !== sequence || !formEl.isConnected) return;
+        state.photo = photo;
+        state.analysis = null;
+        if (timeField) timeField.value = captureTime(tags);
+        target.innerHTML = `<img src="${photo}" class="upload-preview" alt="선택한 사진">`;
+        message.textContent =
+          "사진 준비 완료 · 다른 정보는 비워 두어도 저장할 수 있어요.";
+      } catch (error) {
+        if (request === sequence && formEl.isConnected)
+          message.textContent =
+            error.message || "사진을 읽지 못했어요. 다른 사진을 선택해 주세요.";
+      } finally {
+        if (request === sequence) {
+          state.processing = false;
+          if (formEl.isConnected) {
+            submit.disabled = false;
+            analyzeButton.disabled = !state.photo;
+            picker.value = "";
+          }
+        }
+      }
+    };
   }
   function saveMealEvaluation(date, meal) {
     const key = `${date}-${meal}`,
@@ -777,18 +843,16 @@ import {
     showSheet(
       `${head(r ? "운동 수정" : "운동 기록", "운동 앱 화면 캡처만 올려도 괜찮아요.")}<form id="exerciseForm"><div class="form-grid"><div class="field"><label>날짜</label><input id="exDate" type="date" value="${r?.date || selected}" required /></div><div class="field"><label>기록 시각</label><input id="exTime" type="time" value="${r?.time || ""}" /></div></div><label class="uploadbox" for="exFile"><span class="big">🏃</span><strong>운동 앱 캡처 선택</strong><small>AI 분석은 서버를 연결했을 때 사용 가능</small><input id="exFile" type="file" accept="image/*"></label><div id="exPhotoPreview">${state.photo ? `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">` : ""}</div><button type="button" class="button secondary full" id="exAnalyze" ${!state.photo ? "disabled" : ""}>✦ 캡처에서 운동 정보 추출</button><p class="disclaimer" id="exStatus">운동 종류, 시간, 소모 열량은 직접 입력해도 돼요.</p><div class="field"><label>운동 종류</label><input id="exType" value="${esc(r?.type || "")}" placeholder="예: 걷기, 홈트, 골프 연습 (선택)" /></div><div class="form-grid"><div class="field"><label>운동 시간 (분)</label><input id="exMinutes" type="number" min="0" value="${r?.minutes ?? ""}" placeholder="선택" /></div><div class="field"><label>소모 열량 (kcal)</label><input id="exCalories" type="number" min="0" value="${r?.calories ?? ""}" placeholder="선택" /></div></div><div class="inline-actions"><button type="button" data-close class="button secondary">취소</button><button type="submit" class="button">저장</button></div>${r ? '<button type="button" class="text-button" id="deleteExercise" style="margin-top:9px;color:#c07165;width:100%">운동 기록 삭제</button>' : ""}</form>`,
     );
-    $("#exFile").onchange = async (e) => {
-      if (!e.target.files[0]) return;
-      try {
-        state.photo = await compressImage(e.target.files[0]);
-        $("#exPhotoPreview").innerHTML =
-          `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">`;
-        $("#exAnalyze").disabled = false;
-      } catch {
-        toast("이미지를 읽지 못했어");
-      }
-    };
+    bindPhotoInput({
+      input: "#exFile",
+      form: "#exerciseForm",
+      preview: "#exPhotoPreview",
+      analyze: "#exAnalyze",
+      state,
+    });
+    const exerciseAnalysisForm = $("#exerciseForm");
     $("#exAnalyze").onclick = async () => {
+      const analyzedPhoto = state.photo;
       const b = $("#exAnalyze");
       b.disabled = true;
       b.textContent = "캡처를 분석하고 있어요…";
@@ -802,6 +866,8 @@ import {
           body: JSON.stringify({ kind: "exercise", image: state.photo }),
         });
         let j = await r.json();
+        if (!exerciseAnalysisForm.isConnected || state.photo !== analyzedPhoto)
+          return;
         if (!r.ok) throw Error(j.error || "연결 실패");
         $("#exType").value = j.type || "";
         $("#exMinutes").value = j.minutes ?? "";
@@ -809,6 +875,8 @@ import {
         $("#exStatus").textContent =
           "AI 추출값이 채워졌어요. 맞는지 확인해 주세요.";
       } catch (e) {
+        if (!exerciseAnalysisForm.isConnected || state.photo !== analyzedPhoto)
+          return;
         $("#exStatus").textContent =
           e.message + " · 직접 입력해도 기록할 수 있어요.";
       } finally {
@@ -818,6 +886,10 @@ import {
     };
     $("#exerciseForm").onsubmit = async (e) => {
       e.preventDefault();
+      if (state.processing) {
+        toast("사진 처리가 끝난 뒤 저장해 주세요.");
+        return;
+      }
       let obj = {
         id: r?.id || uid(),
         date: $("#exDate").value,
@@ -1098,7 +1170,11 @@ import {
     };
     if (store)
       $("#signOut").onclick = async () => {
-        await cloud.auth.signOut();
+        const { error } = await cloud.auth.signOut();
+        if (error) {
+          toast("로그아웃하지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
+          return;
+        }
         location.reload();
       };
   }
@@ -1110,11 +1186,20 @@ import {
       return;
     }
     if (button.id === "retryAccount") {
+      if (
+        overlayOpen &&
+        !confirm("입력 중인 내용을 닫고 계정 상태를 새로 불러올까요?")
+      )
+        return;
       location.reload();
       return;
     }
     if (button.hasAttribute("data-close")) {
       closeSheet();
+      return;
+    }
+    if (accountPending) {
+      toast("계정 연결 후 다시 시도해 주세요.");
       return;
     }
     if (button.dataset.view) {
@@ -1247,15 +1332,20 @@ import {
       return;
     }
     committed = structuredClone(data);
-    render();
     accountPending = true;
+    render();
     status.textContent = "계정 연결 확인 중…";
     const { data: auth, error } = await cloud.auth.getSession();
-    if (error) throw error;
+    if (error && !loginLinkError) throw error;
+    loadedUserId = auth.session?.user.id || null;
     if (!auth.session) {
       accountPending = false;
+      render();
       status.innerHTML =
         '<span>이 기기에 저장 · 계정 동기화 꺼짐</span><button type="button" id="signIn" class="text-button">로그인</button>';
+      if (loginLinkError) {
+        showLoginReturnError();
+      }
       return;
     }
     const connectedStore = createJournalStore(cloud, auth.session.user.id);
@@ -1286,6 +1376,39 @@ import {
   }
   try {
     await start();
+    if (cloud) {
+      let changeQueued = false;
+      cloud.auth.onAuthStateChange((event, session) => {
+        if (
+          event === "INITIAL_SESSION" ||
+          (session?.user.id || null) === loadedUserId ||
+          changeQueued
+        )
+          return;
+        changeQueued = true;
+        accountPending = true;
+        // Do not call Auth APIs from inside the synchronous Auth callback.
+        setTimeout(() => {
+          if (!session || loadedUserId) {
+            data = seed();
+            store = null;
+            closeSheet();
+            render();
+            location.reload();
+            return;
+          }
+          if (!busy && !overlayOpen) {
+            location.reload();
+            return;
+          }
+          $("#storageStatus").innerHTML =
+            '<span>다른 탭에서 로그인했어요</span><button id="retryAccount" type="button" class="text-button">계정 변경 적용</button>';
+          toast(
+            "입력 중인 내용은 유지했어요. 저장 전 계정 변경을 적용해 주세요.",
+          );
+        }, 0);
+      });
+    }
   } catch (error) {
     accountPending = true;
     $("#storageStatus").innerHTML =

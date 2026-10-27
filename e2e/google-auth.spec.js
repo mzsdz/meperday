@@ -43,7 +43,7 @@ test("Google button starts OAuth through Supabase and preserves same-origin redi
   await page.locator("#storageStatus #signIn").click();
   await expect(page.locator("#googleSignIn")).toBeEnabled();
   await page.locator("#googleSignIn").click();
-  await expect(page.getByRole("heading")).toHaveText(
+  await expect(page.getByRole("heading", { name: "OAuth provider test boundary", exact: true })).toHaveText(
     "OAuth provider test boundary",
   );
   expect(authorization.searchParams.get("provider")).toBe("google");

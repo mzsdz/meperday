@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createJournalStore } from "../cloud.js";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 
 const url = process.env.VITE_SUPABASE_URL;
 const publicKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -79,12 +80,17 @@ try {
     "PASS: real private upload → DB save → new store reload → signed image → edit; cross-user read/write/photo access denied.",
   );
   if (process.env.VERIFY_BROWSER_URL) {
-    const { chromium, expect } = await import("@playwright/test");
-    const browser = await chromium.launch({ channel: "msedge" });
+    const { chromium, webkit, expect } = await import("@playwright/test");
+    const useWebkit = process.env.VERIFY_BROWSER_ENGINE === "webkit";
+    const browser = await (useWebkit
+      ? webkit.launch()
+      : chromium.launch({ channel: "msedge" }));
     try {
-      const page = await browser.newPage({
-        viewport: { width: 390, height: 844 },
+      const context = await browser.newContext({
+        viewport: { width: 393, height: 736 },
+        ...(useWebkit ? { isMobile: true, hasTouch: true } : {}),
       });
+      const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       // Start as a real first-time visitor before opening a genuine Supabase
@@ -96,16 +102,14 @@ try {
       await expect(page.locator("#overlay")).toHaveClass(/hidden/);
       await page.locator('[data-open-meal="lunch"]').click();
       await page.locator('[data-add-meal="lunch"]').click();
-      await page
-        .locator("#foodFile")
-        .setInputFiles({
-          name: "guest.png",
-          mimeType: "image/png",
-          buffer: Buffer.from(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=",
-            "base64",
-          ),
-        });
+      await page.locator("#foodFile").setInputFiles({
+        name: "guest.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      });
       await expect(page.locator("#photoPreview img")).toBeVisible();
       await page.locator('#foodForm button[type="submit"]').click();
       await expect(page.locator("#overlay")).toHaveClass(/hidden/);
@@ -119,8 +123,15 @@ try {
         options: { redirectTo: process.env.VERIFY_BROWSER_URL },
       });
       if (link.error) throw link.error;
-      await page.goto(link.data.properties.action_link);
-      await expect(page.locator("#storageStatus")).toContainText("서버 저장");
+      const callback = await page.context().newPage();
+      await callback.goto(link.data.properties.action_link);
+      await expect(callback.locator("#storageStatus")).toContainText(
+        "서버 저장",
+      );
+      await expect(page.locator("#storageStatus")).toContainText("서버 저장", {
+        timeout: 15000,
+      });
+      await callback.close();
       await page.locator("#settingsButton").click();
       await page.locator("#importDevice").click();
       await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
@@ -160,9 +171,132 @@ try {
       assert.equal(result.data.payload.records[2].time, "");
       assert.ok(result.data.payload.records[2].photoPath);
       assert.equal(result.data.payload.records[2].photo, undefined);
+      const id = result.data.payload.records[2].id,
+        oldPath = result.data.payload.records[2].photoPath;
+      await page.locator('[data-open-meal="breakfast"]').click();
+      await page.locator(`[data-edit="${id}"]`).click();
+      await page
+        .locator("#foodFile")
+        .setInputFiles(
+          fileURLToPath(
+            new URL("../e2e/fixtures/replacement.png", import.meta.url),
+          ),
+        );
+      await expect(page.locator("#foodForm")).toContainText("사진 준비 완료");
+      await page.locator("#foodName").fill("계정 수정 검증");
+      await page.locator("#foodKcal").fill("321");
+      await page.route("**/rest/v1/meday_journals*", (route) =>
+        route.request().method() === "PATCH"
+          ? route.fulfill({
+              status: 503,
+              contentType: "application/json",
+              body: JSON.stringify({ message: "QA temporary write failure" }),
+            })
+          : route.continue(),
+      );
+      await page.locator('#foodForm button[type="submit"]').click();
+      await expect(page.locator("#toast")).toContainText("서버 저장 실패", {
+        timeout: 20000,
+      });
+      await expect(page.locator("#foodName")).toHaveValue("계정 수정 검증");
+      const unchanged = await clients[0]
+        .from("meday_journals")
+        .select("payload")
+        .single();
+      assert.equal(
+        unchanged.data.payload.records.find((r) => r.id === id).kcal,
+        null,
+      );
+      await page.unroute("**/rest/v1/meday_journals*");
+      await page.locator('#foodForm button[type="submit"]').click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.reload();
+      const edited = await clients[0]
+        .from("meday_journals")
+        .select("payload")
+        .single();
+      const row = edited.data.payload.records.find((r) => r.id === id);
+      assert.equal(row.name, "계정 수정 검증");
+      assert.equal(row.kcal, 321);
+      assert.notEqual(row.photoPath, oldPath);
+      await page.locator('[data-open-meal="breakfast"]').click();
+      await page.locator(`[data-edit="${id}"]`).click();
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await page.locator("#deleteFood").click();
+      await expect(page.locator("#foodForm")).toBeVisible();
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.locator("#deleteFood").click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.reload();
+      await page.locator('[data-add="exercise"]').first().click();
+      await page
+        .locator("#exFile")
+        .setInputFiles(
+          fileURLToPath(
+            new URL("../e2e/fixtures/replacement.png", import.meta.url),
+          ),
+        );
+      await expect(page.locator("#exPhotoPreview img")).toBeVisible();
+      await page.locator('#exerciseForm button[type="submit"]').click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.reload();
+      await page.locator("[data-exercise]").click();
+      await page.locator("#exType").fill("걷기");
+      await page.locator("#exMinutes").fill("45");
+      await page.locator('#exerciseForm button[type="submit"]').click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.reload();
+      await page.locator("[data-exercise]").click();
+      await expect(page.locator("#exType")).toHaveValue("걷기");
+      await expect(page.locator("#exMinutes")).toHaveValue("45");
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.locator("#deleteExercise").click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.locator("#settingsButton").click();
+      await page.locator("#signOut").click();
+      await expect(page.locator("#storageStatus")).toContainText(
+        "이 기기에 저장",
+      );
+      const again = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email: emails[0],
+        options: { redirectTo: process.env.VERIFY_BROWSER_URL },
+      });
+      if (again.error) throw again.error;
+      await page.goto(again.data.properties.action_link);
+      await expect(page.locator("#storageStatus")).toContainText("서버 저장");
+      const final = await clients[0]
+        .from("meday_journals")
+        .select("payload")
+        .single();
+      if (final.error) throw final.error;
+      assert.equal(final.data.payload.records.length, 2);
+      assert.equal(final.data.payload.exercises.length, 0);
+      assert.ok(!final.data.payload.records.some((r) => r.id === id));
+      // Signing out in another tab must remove stale account state in this tab.
+      const other = await page.context().newPage();
+      await other.goto(process.env.VERIFY_BROWSER_URL);
+      await expect(other.locator("#storageStatus")).toContainText("서버 저장");
+      await other.locator("#settingsButton").click();
+      await other.locator("#signOut").click();
+      await expect(page.locator("#storageStatus")).toContainText(
+        "이 기기에 저장",
+        { timeout: 15000 },
+      );
+      await other.close();
       assert.deepEqual(errors, []);
       console.log(
-        "PASS: first visit → guest photo save/reload → genuine email login-link callback → explicit guest import → account photo save → database → browser reload. No browser auth session injection.",
+        "PASS: mobile browser guest CRUD → real login-link callback in another tab → guest import → account photo replacement/edit → failed server save/retry → food/exercise deletion → sign out/in → requery → cross-tab signout. No browser auth session injection.",
       );
     } finally {
       await browser.close();

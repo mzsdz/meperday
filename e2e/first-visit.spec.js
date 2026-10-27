@@ -1,4 +1,44 @@
 import { test, expect } from "@playwright/test";
+test("expired login callback preserves device records and offers a new link", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "meday-mvp-v02",
+      JSON.stringify({
+        records: [
+          {
+            id: "guest-test",
+            date: [
+              new Date().getFullYear(),
+              String(new Date().getMonth() + 1).padStart(2, "0"),
+              String(new Date().getDate()).padStart(2, "0"),
+            ].join("-"),
+            time: "",
+            meal: "breakfast",
+            name: "기기 기록",
+            kcal: null,
+            nutrients: {},
+          },
+        ],
+        exercises: [],
+        evaluations: {},
+        dayEvaluations: {},
+        goals: { kcal: 2200, carb: 270, protein: 90, fat: 65 },
+      }),
+    ),
+  );
+  await page.reload();
+  await page.goto(
+    "/#error=access_denied&error_code=otp_expired&error_description=Link+expired",
+  );
+  await expect(page.locator("#authStatus")).toContainText("새 로그인 링크");
+  await page.getByRole("button", { name: "지금은 이 기기에 기록하기" }).click();
+  await expect(page.locator('[data-open-meal="breakfast"]')).toContainText(
+    "기기 기록",
+  );
+});
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=",
   "base64",
@@ -22,13 +62,11 @@ for (const viewport of [
       await expect(page.locator('[data-open-meal="breakfast"]')).toBeVisible();
       await page.locator('[data-open-meal="breakfast"]').click();
       await page.locator('[data-add-meal="breakfast"]').click();
-      await page
-        .locator("#foodFile")
-        .setInputFiles({
-          name: "meal.png",
-          mimeType: "image/png",
-          buffer: png,
-        });
+      await page.locator("#foodFile").setInputFiles({
+        name: "meal.png",
+        mimeType: "image/png",
+        buffer: png,
+      });
       await expect(page.locator("#photoPreview img")).toBeVisible();
       await page.locator('#foodForm button[type="submit"]').click();
       await expect(page.locator("#overlay")).toHaveClass(/hidden/);

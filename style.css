@@ -480,21 +480,26 @@ main {
   box-shadow: 0 5px 14px #1c322932;
 }
 .empty {
-  text-align: center;
-  padding: 26px 10px;
-}
-.empty .emoji {
-  font-size: 30px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  text-align: left;
 }
 .empty h3 {
-  margin: 4px 0 7px;
-  font-size: 15px;
+  margin: 0 0 4px;
+  font-size: 14px;
 }
 .empty p {
+  margin: 0;
   color: #a2a8a3;
   font-size: 12px;
   line-height: 1.55;
+}
+.empty .button {
+  flex-shrink: 0;
+  padding: 11px 13px;
 }
 .text-button {
   border: 0;
@@ -676,6 +681,7 @@ main {
   border-radius: 25px 25px 0 0;
   padding: 9px 22px calc(24px + env(safe-area-inset-bottom));
   box-shadow: 0 -15px 45px #0002;
+  overscroll-behavior: contain;
 }
 .sheet-handle {
   width: 42px;
@@ -971,6 +977,10 @@ main {
   color: #6c7f70;
   text-align: center;
   padding: 0 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 .meal-label span {
   display: none;
@@ -981,4 +991,14 @@ button:disabled {
 }
 .sheet:focus {
   outline: 2px solid #75ab85;
+}
+@media (min-width: 600px) {
+  .overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .sheet {
+    border-radius: 24px;
+    max-height: calc(100dvh - 48px);
+  }
 }

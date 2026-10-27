@@ -234,8 +234,9 @@ import {
   let data = seed(),
     store = null,
     committed = seed(),
-    busy = false;
-  if (!cloud) {
+    busy = false,
+    accountPending = false;
+  {
     try {
       data = JSON.parse(localStorage.getItem(KEY)) || seed();
     } catch {
@@ -255,8 +256,9 @@ import {
       b.disabled = true;
     });
     try {
-      if (cloud) {
-        if (!store) throw Error("로그인 후 저장해 주세요.");
+      if (accountPending)
+        throw Error("계정 기록을 불러오고 있어요. 잠시 후 다시 저장해 주세요.");
+      if (store) {
         await store.save(data);
       } else localStorage.setItem(KEY, JSON.stringify(data));
       committed = structuredClone(data);
@@ -359,7 +361,7 @@ import {
     let base = rows.length
       ? `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-line"><div class="cal-big">${knownKcal ? fmtInt(cal) : "—"}<span> kcal${unknownKcal && knownKcal ? " + 미확인" : ""}</span></div></div><div class="hint" style="margin-top:6px">기록된 식사 기준 · 추정치 포함${unknownKcal ? " · 열량 미확인 기록 있음" : ""} <button class="text-button" id="dayEvalButton">${data.dayEvaluations[selected] ? "하루 느낌 수정" : "하루 느낌 기록 (선택)"}</button></div></div>`
       : `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-big">— <span>kcal</span></div><div class="hint">아직 이 날의 식사 기록이 없어요</div></div>`;
-    return `<div class="date-nav"><button class="ghost-date" id="goToday">${selected === TODAY ? "오늘" : "오늘로 이동"}</button><strong class="date-title">${fmtDay(selected)}</strong><div class="date-arrows"><button data-day-shift="-1" aria-label="이전 날">‹</button><button data-day-shift="1" aria-label="다음 날">›</button></div></div>${base}${!rows.length ? `<div class="card empty"><div class="emoji">📸</div><h3>사진 한 장이면 충분해</h3><p>음식을 찍으면 기록이 시작돼요.<br>다른 정보는 원할 때만 추가하면 돼요.</p><button class="button" data-add="food">식사 사진 올리기</button></div>` : ""}<div class="section-header"><h2>식사</h2><span class="subtle">누르면 상세 기록</span></div><div class="meal-list">${mealHTML}</div><div class="section-header"><h2>운동 기록</h2><button class="text-button" data-add="exercise">+ 운동 추가</button></div>${exercise.length ? `<div class="card activity-list">${exercise.map((e) => `<button class="item-row" style="border:0;background:white;width:100%;text-align:left" data-exercise="${e.id}"><div><strong>🏃 ${esc(e.type)}</strong><small>${e.minutes ? `${e.minutes}분` : ""}${e.calories ? ` · ${e.calories}kcal(운동앱 추정)` : ""}</small></div><span>›</span></button>`).join("")}</div>` : `<button class="action-card" data-add="exercise"><span class="action-icon">⌁</span><div><strong>운동 앱 캡처 올리기</strong><small>운동 종류 · 시간 · 소모 열량 (선택)</small></div><span class="chevron" style="margin-left:auto">›</span></button>`}${rows.length ? `<div class="card nutrients-card" style="margin-top:15px"><div class="line-action"><strong>${selected === TODAY ? "오늘의 영양소" : "이 날의 영양소"}</strong><span class="muted micro">하루 기준 대비</span></div>${showNutrition(rows)}<div class="nutrient-note">검은 선 = 설정한 하루 기준 100% · 막대는 145%까지 표시<br>추정 영양정보만 합산하며, 일부 음식의 영양소는 알 수 없어요.</div></div><div class="card"><div class="line-action" style="margin-bottom:15px"><strong>주의가 필요한 항목</strong><span class="muted micro">섭취 상한과 비교</span></div>${showNutrition(rows, "warning")}<div class="nutrient-note">나트륨·포화지방은 100%를 채우는 목표가 아니라 가급적 넘지 않을 상한이에요.</div></div>` : ""}<button class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지? ✨</strong><small>오늘의 영양 상태와 내 입맛을 함께 고려해요</small></span><span>›</span></button>${rows.some((r) => r.sample) ? '<p class="record-note">일부 기록은 이전 대화에서 옮긴 <b>추정치</b>예요. 수정·삭제할 수 있어요.</p>' : ""}`;
+    return `<div class="date-nav"><button class="ghost-date" id="goToday">${selected === TODAY ? "오늘" : "오늘로 이동"}</button><strong class="date-title">${fmtDay(selected)}</strong><div class="date-arrows"><button data-day-shift="-1" aria-label="이전 날">‹</button><button data-day-shift="1" aria-label="다음 날">›</button></div></div>${base}${!rows.length ? `<div class="card empty"><div><h3>사진 한 장이면 충분해</h3><p>나머지는 원할 때만 기록해요.</p></div><button class="button" data-add="food">사진 올리기</button></div>` : ""}<div class="section-header"><h2>식사</h2><span class="subtle">누르면 상세 기록</span></div><div class="meal-list">${mealHTML}</div><div class="section-header"><h2>운동 기록</h2><button class="text-button" data-add="exercise">+ 운동 추가</button></div>${exercise.length ? `<div class="card activity-list">${exercise.map((e) => `<button class="item-row" style="border:0;background:white;width:100%;text-align:left" data-exercise="${e.id}"><div><strong>🏃 ${esc(e.type)}</strong><small>${e.minutes ? `${e.minutes}분` : ""}${e.calories ? ` · ${e.calories}kcal(운동앱 추정)` : ""}</small></div><span>›</span></button>`).join("")}</div>` : `<button class="action-card" data-add="exercise"><span class="action-icon">⌁</span><div><strong>운동 앱 캡처 올리기</strong><small>운동 종류 · 시간 · 소모 열량 (선택)</small></div><span class="chevron" style="margin-left:auto">›</span></button>`}${rows.length ? `<div class="card nutrients-card" style="margin-top:15px"><div class="line-action"><strong>${selected === TODAY ? "오늘의 영양소" : "이 날의 영양소"}</strong><span class="muted micro">하루 기준 대비</span></div>${showNutrition(rows)}<div class="nutrient-note">검은 선 = 설정한 하루 기준 100% · 막대는 145%까지 표시<br>추정 영양정보만 합산하며, 일부 음식의 영양소는 알 수 없어요.</div></div><div class="card"><div class="line-action" style="margin-bottom:15px"><strong>주의가 필요한 항목</strong><span class="muted micro">섭취 상한과 비교</span></div>${showNutrition(rows, "warning")}<div class="nutrient-note">나트륨·포화지방은 100%를 채우는 목표가 아니라 가급적 넘지 않을 상한이에요.</div></div>` : ""}<button class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지? ✨</strong><small>오늘의 영양 상태와 내 입맛을 함께 고려해요</small></span><span>›</span></button>${rows.some((r) => r.sample) ? '<p class="record-note">일부 기록은 이전 대화에서 옮긴 <b>추정치</b>예요. 수정·삭제할 수 있어요.</p>' : ""}`;
   }
   function weekStart(s) {
     let d = dateObj(s);
@@ -472,11 +474,36 @@ import {
   }
   let priorFocus = null;
   function closeSheet() {
-    if (cloud && !store) return;
     priorFocus?.focus();
     overlayOpen = false;
     $("#overlay").classList.add("hidden");
     document.body.style.overflow = "";
+  }
+  function showLogin() {
+    showSheet(
+      `${head("내 기록을 계정에 보관하기", "로그인 없이도 기록할 수 있어요. 로그인하면 다른 기기에서도 이어 볼 수 있어요.")}<form id="loginForm"><div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="name@example.com" required /></div><button type="submit" class="button full">로그인 링크 받기</button><p id="authStatus" role="status"></p><p class="disclaimer">기기에 저장한 기록은 로그인 후 설정에서 가져올 수 있어요.</p><button type="button" class="button secondary full" data-close>지금은 이 기기에 기록하기</button></form>`,
+    );
+    $("#loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const button = e.target.querySelector('button[type="submit"]');
+      const message = $("#authStatus");
+      button.disabled = true;
+      message.textContent = "로그인 링크를 보내고 있어요…";
+      try {
+        const { error } = await cloud.auth.signInWithOtp({
+          email: $("#email").value.trim(),
+          options: { emailRedirectTo: location.origin },
+        });
+        if (error) throw error;
+        message.textContent =
+          "이메일을 확인해 주세요. 로그인 링크를 열면 이 앱으로 돌아옵니다. 메일이 없으면 스팸함도 확인해 주세요.";
+      } catch (error) {
+        message.textContent =
+          "로그인 링크를 보내지 못했어요. 잠시 후 다시 시도해 주세요. 기기 기록은 계속 사용할 수 있어요.";
+      } finally {
+        button.disabled = false;
+      }
+    };
   }
   function showSheet(html) {
     priorFocus = document.activeElement;
@@ -965,8 +992,38 @@ import {
   }
   function showSettings() {
     showSheet(
-      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${cloud ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "로컬 모드: 이 브라우저에만 저장됩니다. 서버 동기화는 연결 설정 후 사용할 수 있습니다."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div><div class="field"><label for="accessCode">AI 접근 코드 (서버에 설정한 경우에만)</label><input id="accessCode" type="password" placeholder="미설정이면 비워두세요" value="${esc(localStorage.getItem("meday-access-code") || "")}" /></div><button class="button secondary full" id="saveCode">AI 접근 코드 저장</button>${cloud ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : ""}`,
+      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div><div class="field"><label for="accessCode">AI 접근 코드 (서버에 설정한 경우에만)</label><input id="accessCode" type="password" placeholder="미설정이면 비워두세요" value="${esc(localStorage.getItem("meday-access-code") || "")}" /></div><button class="button secondary full" id="saveCode">AI 접근 코드 저장</button>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
     );
+    let device = null;
+    try {
+      device = JSON.parse(localStorage.getItem(KEY) || "null");
+    } catch {}
+    if (
+      store &&
+      device &&
+      (device.records?.length || device.exercises?.length)
+    ) {
+      $("#sheetContent").insertAdjacentHTML(
+        "beforeend",
+        `<button type="button" class="button secondary full" id="importDevice">이 기기 기록 ${device.records.length + device.exercises.length}개를 계정에 가져오기</button><p class="disclaimer">계정 기록은 유지하고 기기에만 있는 기록을 추가해요.</p>`,
+      );
+      $("#importDevice").onclick = async () => {
+        for (const kind of ["records", "exercises"]) {
+          const ids = new Set(data[kind].map((row) => row.id));
+          data[kind].push(...device[kind].filter((row) => !ids.has(row.id)));
+        }
+        data.evaluations = { ...device.evaluations, ...data.evaluations };
+        data.dayEvaluations = {
+          ...device.dayEvaluations,
+          ...data.dayEvaluations,
+        };
+        if (!(await save())) return;
+        localStorage.removeItem(KEY);
+        closeSheet();
+        render();
+        toast("기기 기록을 계정에 보관했어요.");
+      };
+    }
     $("#goalForm").onsubmit = async (e) => {
       e.preventDefault();
       document
@@ -1039,7 +1096,7 @@ import {
         toast("백업 파일을 확인해줘");
       }
     };
-    if (cloud)
+    if (store)
       $("#signOut").onclick = async () => {
         await cloud.auth.signOut();
         location.reload();
@@ -1048,7 +1105,14 @@ import {
   document.addEventListener("click", (e) => {
     const button = e.target.closest("button,[data-close]");
     if (!button || busy) return;
-    if (cloud && !store) return;
+    if (button.id === "signIn") {
+      showLogin();
+      return;
+    }
+    if (button.id === "retryAccount") {
+      location.reload();
+      return;
+    }
     if (button.hasAttribute("data-close")) {
       closeSheet();
       return;
@@ -1182,32 +1246,22 @@ import {
       render();
       return;
     }
-    status.textContent = "서버 연결 중…";
+    committed = structuredClone(data);
+    render();
+    accountPending = true;
+    status.textContent = "계정 연결 확인 중…";
     const { data: auth, error } = await cloud.auth.getSession();
     if (error) throw error;
     if (!auth.session) {
-      showSheet(
-        `${head("me/day에 로그인", "사진과 기록을 내 계정에 보관해요.")}<form id="loginForm"><div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" required /></div><button class="button full">로그인 링크 받기</button><p id="authStatus" role="status"></p></form>`,
-      );
-      $("#loginForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const b = e.target.querySelector("button");
-        b.disabled = true;
-        const { error } = await cloud.auth.signInWithOtp({
-          email: $("#email").value,
-          options: { emailRedirectTo: location.origin },
-        });
-        $("#authStatus").textContent = error
-          ? error.message
-          : "이메일의 로그인 링크를 열어 주세요.";
-        b.disabled = false;
-      };
-      status.textContent = "로그인 후 서버에 저장";
+      accountPending = false;
+      status.innerHTML =
+        '<span>이 기기에 저장 · 계정 동기화 꺼짐</span><button type="button" id="signIn" class="text-button">로그인</button>';
       return;
     }
     const connectedStore = createJournalStore(cloud, auth.session.user.id);
     data = (await connectedStore.load()) || seed();
     store = connectedStore;
+    accountPending = false;
     committed = structuredClone(data);
     status.textContent = "내 계정 · 서버 저장";
     closeSheet();
@@ -1233,8 +1287,12 @@ import {
   try {
     await start();
   } catch (error) {
-    $("#main").textContent =
-      "서버 기록을 불러오지 못했습니다. 연결과 DB 설정을 확인한 뒤 새로고침해 주세요.";
-    toast(error.message || "연결 실패");
+    accountPending = true;
+    $("#storageStatus").innerHTML =
+      '<span>계정 연결을 확인해 주세요</span><button type="button" id="retryAccount" class="text-button">다시 연결</button>';
+    render();
+    toast(
+      "계정 기록을 불러오지 못했어요. 연결을 확인한 뒤 다시 연결해 주세요.",
+    );
   }
 })();

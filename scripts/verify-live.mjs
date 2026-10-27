@@ -12,6 +12,7 @@ if (!url || !publicKey || !adminKey)
 const options = { auth: { persistSession: false, autoRefreshToken: false } };
 const admin = createClient(url, adminKey, options);
 const users = [];
+const emails = [];
 try {
   const clients = [];
   for (let i = 0; i < 2; i++) {
@@ -24,6 +25,7 @@ try {
     });
     if (created.error) throw created.error;
     users.push(created.data.user.id);
+    emails.push(email);
     const client = createClient(url, publicKey, options);
     const signed = await client.auth.signInWithPassword({ email, password });
     if (signed.error) throw signed.error;
@@ -85,28 +87,59 @@ try {
       });
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
-      const {
-        data: { session },
-      } = await clients[0].auth.getSession();
-      await page.addInitScript(
-        ({ session, key }) =>
-          localStorage.setItem(key, JSON.stringify(session)),
-        { session, key: "sb-xbclkxeexrhdqhxafuad-auth-token" },
-      );
+      // Start as a real first-time visitor before opening a genuine Supabase
+      // login link. No auth session is injected into browser storage.
       await page.goto(process.env.VERIFY_BROWSER_URL);
-      await expect(page.locator("#storageStatus")).toContainText("서버 저장");
-      await page.locator('[data-open-meal="breakfast"]').click();
-      await page.locator('[data-add-meal="breakfast"]').click();
+      await expect(page.locator("#storageStatus")).toContainText(
+        "이 기기에 저장",
+      );
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/);
+      await page.locator('[data-open-meal="lunch"]').click();
+      await page.locator('[data-add-meal="lunch"]').click();
       await page
         .locator("#foodFile")
         .setInputFiles({
-          name: "qa.png",
+          name: "guest.png",
           mimeType: "image/png",
           buffer: Buffer.from(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=",
             "base64",
           ),
         });
+      await expect(page.locator("#photoPreview img")).toBeVisible();
+      await page.locator('#foodForm button[type="submit"]').click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/);
+      await page.reload();
+      await expect(page.locator('[data-open-meal="lunch"]')).toContainText(
+        "열량 미확인",
+      );
+      const link = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email: emails[0],
+        options: { redirectTo: process.env.VERIFY_BROWSER_URL },
+      });
+      if (link.error) throw link.error;
+      await page.goto(link.data.properties.action_link);
+      await expect(page.locator("#storageStatus")).toContainText("서버 저장");
+      await page.locator("#settingsButton").click();
+      await page.locator("#importDevice").click();
+      await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
+        timeout: 20000,
+      });
+      await page.reload();
+      await expect(page.locator('[data-open-meal="lunch"]')).toContainText(
+        "열량 미확인",
+      );
+      await page.locator('[data-open-meal="breakfast"]').click();
+      await page.locator('[data-add-meal="breakfast"]').click();
+      await page.locator("#foodFile").setInputFiles({
+        name: "qa.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      });
       await expect(page.locator("#photoPreview img")).toBeVisible();
       await page.locator('#foodForm button[type="submit"]').click();
       await expect(page.locator("#overlay")).toHaveClass(/hidden/, {
@@ -123,13 +156,13 @@ try {
         .from("meday_journals")
         .select("payload")
         .single();
-      assert.equal(result.data.payload.records.length, 2);
-      assert.equal(result.data.payload.records[1].time, "");
-      assert.ok(result.data.payload.records[1].photoPath);
-      assert.equal(result.data.payload.records[1].photo, undefined);
+      assert.equal(result.data.payload.records.length, 3);
+      assert.equal(result.data.payload.records[2].time, "");
+      assert.ok(result.data.payload.records[2].photoPath);
+      assert.equal(result.data.payload.records[2].photo, undefined);
       assert.deepEqual(errors, []);
       console.log(
-        "PASS: mobile browser → photo-only submit → real private Storage + database → browser reload.",
+        "PASS: first visit → guest photo save/reload → genuine email login-link callback → explicit guest import → account photo save → database → browser reload. No browser auth session injection.",
       );
     } finally {
       await browser.close();

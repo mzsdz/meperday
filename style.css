@@ -1219,7 +1219,7 @@ body.brand-home { background:#f7f8f4; }
 .brand-hero .hero-helper { margin-top:16px;font-size:11px;line-height:1.6;color:#657567; }
 .brand-hero .batch-status { max-width:400px; }
 .nav-icon svg { display:block;width:23px;height:23px; }
-.brand-home .bottom-nav { width:min(344px,calc(100% - 40px));height:58px;bottom:calc(24px + env(safe-area-inset-bottom));padding:5px;gap:4px;border:1px solid #e2e8df;border-radius:999px;background:#ffffffeb;box-shadow:0 6px 26px #263f2d08; }
+.brand-home .bottom-nav { display:none;width:min(344px,calc(100% - 40px));height:58px;bottom:calc(24px + env(safe-area-inset-bottom));padding:5px;gap:4px;border:1px solid #e2e8df;border-radius:999px;background:#ffffffeb;box-shadow:0 6px 26px #263f2d08; }
 .brand-home .bottom-link { flex:1;min-width:0;height:46px;flex-direction:row;justify-content:center;gap:8px;font-size:12px;border-radius:999px;color:#657567; }
 .brand-home .bottom-link.active { background:#edf2e9;color:#365440;font-weight:650; }
 .brand-home .nav-icon svg { width:19px;height:19px; }

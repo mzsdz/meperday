@@ -1314,7 +1314,7 @@ import {
   }
   function showSettings() {
     showSheet(
-      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<button type="button" class="button secondary full" data-profile>내 정보 · 칼로리 비교 기준</button><h3>영양소 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
+      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<button type="button" class="button secondary full" data-open-journal>내 기록 보기</button><button type="button" class="button secondary full" data-profile>내 정보 · 칼로리 비교 기준</button><h3>영양소 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
     );
     let device = null;
     try {
@@ -1556,7 +1556,7 @@ import {
       render();
       return;
     }
-    if (button.id === "myPageBtn") { surface = "mine"; render(); return; }
+    if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { surface = "mine"; closeSheet(); render(); return; }
     if (button.id === "profileButton" || button.hasAttribute("data-profile")) { showProfile(); return; }
     if (button.id === "newPhotoFromTimeline") { surface="home"; activeCaptureId=null; render(); $("#conciergePhoto").click(); return; }
     if (button.dataset.conversation) { void openConversation(button.dataset.conversation,button.dataset.recordKind); return; }

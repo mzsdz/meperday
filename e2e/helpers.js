@@ -1,5 +1,8 @@
 import { expect } from "@playwright/test";
-export async function mine(page) { await page.locator("#myPageBtn").click(); }
+export async function mine(page) {
+  if (await page.locator("#myPageBtn").isVisible()) await page.locator("#myPageBtn").click();
+  else { await page.locator("#settingsButton").click(); await page.locator("[data-open-journal]").click(); }
+}
 export async function addManual(page,kind) {
   await mine(page);
   const details=page.locator(".manual-options");

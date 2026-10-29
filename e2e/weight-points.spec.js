@@ -1,17 +1,18 @@
+import {mine,addManual,editRecord} from "./helpers.js";
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 const photo = fileURLToPath(
   new URL("./fixtures/replacement.png", import.meta.url),
 );
 for (const width of [320, 393, 430]) {
-  test(`${width}px weight photo-only save, optional kg edit, replacement, delete and guest points`, async ({
+  test(`${width}px weight photo-only save, optional kg edit, replacement, delete and points are hidden`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 736 });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/");
-    await page.locator('[data-add="weight"]').first().click();
+    await addManual(page,"weight");
     const box = page.locator('label[for="weightFile"]');
     const layout = await box.evaluate((el) => ({
       width: el.offsetWidth,
@@ -27,7 +28,8 @@ for (const width of [320, 393, 430]) {
     await page.locator('#weightForm button[type="submit"]').click();
     await expect(page.locator("#overlay")).toHaveClass(/hidden/);
     await page.reload();
-    await page.locator("[data-weight]").click();
+  await mine(page);
+    await editRecord(page,"weight");
     await expect(page.locator("#weightKg")).toHaveValue("");
     await expect(page.locator("#weightTime")).toHaveValue("");
     await page.locator("#weightKg").fill("67.25");
@@ -41,7 +43,8 @@ for (const width of [320, 393, 430]) {
     await page.locator('#weightForm button[type="submit"]').click();
     await expect(page.locator("#overlay")).toHaveClass(/hidden/);
     await page.reload();
-    await expect(page.locator("[data-weight]")).toContainText("67.25 kg");
+  await mine(page);
+    await expect(page.locator('[data-record-kind="weight"]')).toContainText("67.25 kg");
     await page.locator("#settingsButton").click();
     const downloaded = page.waitForEvent("download");
     await page.locator("#exportData").click();
@@ -59,23 +62,20 @@ for (const width of [320, 393, 430]) {
     });
     await expect(page.locator("#overlay")).toHaveClass(/hidden/);
     await page.reload();
-    await expect(page.locator("[data-weight]")).toContainText("67.25 kg");
-    await page.locator("[data-weight]").click();
+  await mine(page);
+    await expect(page.locator('[data-record-kind="weight"]')).toContainText("67.25 kg");
+    await editRecord(page,"weight");
     await expect(page.locator("#weightNote")).toHaveValue("선택 메모");
     page.once("dialog", (dialog) => dialog.dismiss());
     await page.locator("#deleteWeight").click();
     await expect(page.locator("#weightForm")).toBeVisible();
     page.once("dialog", (dialog) => dialog.accept());
     await page.locator("#deleteWeight").click();
-    await expect(page.locator("[data-weight]")).toHaveCount(0);
+    await expect(page.locator('[data-record-kind="weight"]')).toHaveCount(0);
     await page.reload();
-    await expect(page.locator("[data-weight]")).toHaveCount(0);
-    await page.locator("#pointsButton").click();
-    await expect(page.locator("#pointsContent")).toContainText("1,000P");
-    await expect(page.locator("#pointsContent")).toContainText(
-      "포인트를 사용하지 않아요",
-    );
-    await expect(page.locator("#pointsBalance")).toHaveCount(0);
+  await mine(page);
+    await expect(page.locator('[data-record-kind="weight"]')).toHaveCount(0);
+    await expect(page.locator("#pointsButton")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }

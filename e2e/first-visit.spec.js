@@ -1,3 +1,4 @@
+import {mine} from "./helpers.js";
 import { test, expect } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
   await page.route("https://example.supabase.co/auth/v1/settings", (route) =>
@@ -44,7 +45,8 @@ test("expired login callback preserves device records and offers a new link", as
   );
   await expect(page.locator("#authStatus")).toContainText("새 로그인 링크");
   await page.getByRole("button", { name: "지금은 이 기기에 기록하기" }).click();
-  await expect(page.locator('[data-open-meal="breakfast"]')).toContainText(
+  await mine(page);
+  await expect(page.locator('[data-record-kind="food"]')).toContainText(
     "기기 기록",
   );
 });
@@ -68,21 +70,12 @@ for (const viewport of [
         "이 기기에 저장",
       );
       await expect(page.locator("#overlay")).toHaveClass(/hidden/);
-      await expect(page.locator('[data-open-meal="breakfast"]')).toBeVisible();
-      await page.locator('[data-open-meal="breakfast"]').click();
-      await page.locator('[data-add-meal="breakfast"]').click();
-      await page.locator("#foodFile").setInputFiles({
-        name: "meal.png",
-        mimeType: "image/png",
-        buffer: png,
-      });
-      await expect(page.locator("#photoPreview img")).toBeVisible();
-      await page.locator('#foodForm button[type="submit"]').click();
-      await expect(page.locator("#overlay")).toHaveClass(/hidden/);
+      await expect(page.locator("#conciergePhoto")).toHaveCount(1);
+      await page.locator("#conciergePhoto").setInputFiles({name:"meal.png",mimeType:"image/png",buffer:png});
+      await expect(page.locator(".photo-message img")).toBeVisible();
       await page.reload();
-      await expect(page.locator('[data-open-meal="breakfast"]')).toContainText(
-        "열량 미확인",
-      );
+      await mine(page);
+      await expect(page.locator('[data-record-kind="capture"]')).toBeVisible();
       await page.locator("#storageStatus #signIn").click();
       await expect(page.locator("#loginForm")).toBeVisible();
       const submit = await page

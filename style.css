@@ -1130,3 +1130,59 @@ button:disabled {
 .weight-row .thumb {
   flex-shrink: 0;
 }
+
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.concierge-nav { display: flex; justify-content: space-around; padding-inline: 35px; }
+.concierge-nav .bottom-link { min-width: 110px; }
+.concierge-empty { min-height: calc(var(--viewport-height, 100dvh) - 205px); display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 18px 0 40px; }
+.concierge-empty h1 { font-size: 30px; letter-spacing: -1.2px; margin: 10px 0; }
+.concierge-empty p:not(.eyebrow) { line-height: 1.8; font-size: 14px; color: #718077; }
+.concierge-empty small { color: #88948b; font-size: 11px; margin-top: 25px; }
+.photo-orb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 138px; height: 138px; position: relative; margin: 24px 0 8px; background: #e2eee4; color: #32523c; border: 1px solid #cbded0; border-radius: 50%; box-shadow: 0 12px 35px #799d7e22; font-size: 14px; font-weight: 700; }
+.photo-orb input,.new-photo-button input { position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer; }
+.new-photo-button { position:relative;display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#476c50;padding:8px; }
+.new-photo-button svg { width: 19px; height: 19px; }
+.conversation-top { display: flex; justify-content: space-between; align-items: center; color: #77887a; font-size: 12px; }
+.photo-message { margin: 13px 0 23px auto; max-width: 84%; }
+.photo-message img { display:block;max-height:290px;width:100%;object-fit:contain;border-radius:18px;background:#e9ede7; }
+.chat-message { margin: 15px 0;max-width:94%; }
+.chat-message > span { font-size: 10px; color: #7e8c80; }
+.chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.85; margin: 5px 0 0; }
+.from-assistant { padding: 10px 0; }
+.from-user { margin-left:auto;background:#e6eee2;border-radius:17px 17px 3px 17px;padding:12px 15px; }
+.from-system p { font-size:12px;color:#7b897c; }
+.conversation-fact { padding:12px 14px; background:#eff2ec;border-radius:12px;font-size:13px;color:#49604c; }
+.conversation-fact small { display:block;font-size:10px;color:#839080;margin-top:5px; }
+.chat-assumptions { font-size:12px;color:#7b897c;line-height:1.8;padding:4px 0 12px; }
+.chat-composer { display:flex;align-items:flex-end;gap:8px;background:white;border:1px solid #dce5d8;border-radius:20px;padding:10px;margin-top:20px; }
+.chat-composer textarea { font-size:16px;min-width:0;flex:1;background:transparent;border:0;box-shadow:none;padding:4px 5px;resize:vertical;min-height:54px;max-height:180px; }
+.chat-send { flex-shrink:0;width:35px;height:35px;border:0;border-radius:50%;background:#365b40;color:white;font-size:22px; }
+.chat-note { font-size:10px;line-height:1.7;color:#8b978a;margin:9px 7px; }
+.chat-tools { display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 25px; }
+.chat-tools .text-button { font-size:11px; }
+.mypage-intro { display:flex;align-items:center;justify-content:space-between;margin:10px 1px 18px; }
+.mypage-intro h1 { font-size:25px;margin:5px 0 0;letter-spacing:-.8px; }
+.daily-energy { margin-top:15px; }
+.energy-comparison { margin-top:22px; }
+.energy-comparison > div:first-child { display:flex;justify-content:space-between;gap:8px;font-size:11px; }
+.energy-comparison strong { white-space:nowrap;color:#526b55; }
+.energy-track { height:9px;background:#e7ece2;border-radius:9px;overflow:hidden;margin:12px 0 8px; }
+.energy-track i { display:block;height:100%;border-radius:9px;background:#91ad89; }
+.energy-comparison p { font-size:11px;color:#82907d; }
+.energy-setup { text-align:left;padding:13px 0;background:transparent;border:0;font-size:12px;color:#5e795e; }
+.energy-setup span { font-size:10px;margin-left:5px; }
+.activity-summary { display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:13px 5px;color:#758570; }
+.timeline-list { background:#fff;border-radius:18px;overflow:hidden; }
+.timeline-row { display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid #f0f2ed;background:transparent;text-align:left;padding:14px 10px; }
+.timeline-row:last-child { border-bottom:0; }
+.timeline-row time { width:55px;flex-shrink:0;font-size:10px;color:#8c9888; }
+.timeline-photo { display:flex;align-items:center;justify-content:center;width:48px;height:48px;flex-shrink:0;background:#f0f3eb;border-radius:12px;color:#7c9478;overflow:hidden; }
+.timeline-photo img { width:100%;height:100%;object-fit:cover; }
+.timeline-text { flex:1;min-width:0; }
+.timeline-text strong { display:block;font-size:12px;overflow-wrap:anywhere; }
+.timeline-text small { display:block;font-size:10px;line-height:1.6;color:#899583;margin-top:5px; }
+.manual-options { font-size:12px;color:#82917c;margin:17px 3px; }
+.manual-options .choice-row { margin-top:12px; }
+.nutrients-detail { margin-top:22px; }
+.nutrients-detail > summary { font-size:13px;margin-bottom:17px;color:#63795b;cursor:pointer; }

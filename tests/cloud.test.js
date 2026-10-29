@@ -114,3 +114,16 @@ test("concurrent writer is rejected and database failures do not report success"
   f.setFail(true);
   await assert.rejects(a.save(journal()), /서버 저장 실패/);
 });
+
+test("conversation and linked record retain their own photo paths when IDs match", async () => {
+  const f = fakeClient(), store = createJournalStore(f.client, "user-a");
+  const value = journal();
+  value.captures = [{...value.records[0], photo:"data:image/jpeg;base64,/9j/AA==", messages:[]}];
+  await store.save(value);
+  assert.notEqual(value.records[0].photoPath, value.captures[0].photoPath);
+  assert.equal(value.captures[0].photoPath, f.saved.payload.captures[0].photoPath);
+  await store.save(value);
+  assert.equal(f.uploads, 2, "repeated conversation saves reuse uploaded content hashes");
+  const restored = await store.load();
+  assert.match(restored.captures[0].photo, /^https:/);
+});

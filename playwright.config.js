@@ -6,7 +6,7 @@ export default defineConfig({
     { name: "local", testMatch: "journal.spec.js", use: chromiumUse },
     {
       name: "iphone-flow",
-      testMatch: ["iphone-flow.spec.js", "weight-points.spec.js"],
+      testMatch: ["iphone-flow.spec.js", "weight-points.spec.js", "concierge.spec.js"],
       use: chromiumUse,
     },
     {
@@ -22,6 +22,7 @@ export default defineConfig({
               "upload-layout.spec.js",
               "iphone-flow.spec.js",
               "weight-points.spec.js",
+              "concierge.spec.js",
             ],
             use: {
               browserName: "webkit",

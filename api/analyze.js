@@ -2,7 +2,7 @@ import { generateText, Output } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { foodSchema, exerciseSchema } from "../server/analysis-schema.js";
-import { conciergeSchema, conciergeRequest, conciergePrompt, validateConcierge } from "../server/concierge-schema.js";
+import { conciergeSchema, conciergeRequest, conciergePrompt, validateConcierge, needsPhotoEvidence } from "../server/concierge-schema.js";
 export async function aiConfigured(env = process.env, resolveOidc = getVercelOidcToken) {
   if (env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN) return true;
   try { return Boolean(await resolveOidc()); } catch { return false; }
@@ -61,6 +61,14 @@ export function createAnalysisHandler({
         return res
           .status(401)
           .json({ error: "로그인이 만료됐어요. 다시 로그인해 주세요." });
+      if(concierge && needsPhotoEvidence(conversation.data.message)) {
+        return res.status(200).json({
+          ...(conversation.data.current || {kind:"unknown",assumptions:[],food:null,exercise:null,weightKg:null}),
+          shouldUpdate:false,
+          reply:"사진에 없는 음식이나 운동은 대화만으로 기록에 추가하지 않아요. 해당 사진을 올려 주시면 별도 기록으로 남길게요. 지금 사진의 기록은 그대로 두었어요.",
+          source:"사진 기록 안내",
+        });
+      }
       const quota = await client.rpc("reserve_meday_ai");
       if (quota.error) {
         if (quota.error.message?.includes("analysis_daily_limit"))

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createAnalysisHandler } from "../api/analyze.js";
 import { applyConcierge } from "../concierge-domain.js";
 import { energyReference, timeline } from "../energy.js";
+import { needsPhotoEvidence } from "../server/concierge-schema.js";
 const food={name:"식사",kcal:500,nutrients:Object.fromEntries(["carb","protein","fat","fiber","calcium","iron","vitD","vitC","potassium","sodium","satFat"].map(k=>[k,null])),notes:"밥 한 공기로 추정"};
 const answer={kind:"food",reply:"밥 한 공기로 보았어요. 먹은 양을 설명하면 함께 고칠 수 있어요.",assumptions:["밥 한 공기"],shouldUpdate:true,food,exercise:null,weightKg:null};
 const base=()=>({records:[],exercises:[],weights:[],captures:[]});
@@ -44,4 +45,13 @@ test("concierge is authenticated, validates correction context, and preserves un
 test("concierge rejects inconsistent model classification instead of saving a fake result",async()=>{
   const handler=createAnalysisHandler({concierge:true,env,clientFactory:()=>({auth:{getUser:async()=>({data:{user:{id:"u"}}})},rpc:async()=>({data:19})}),generate:async()=>({output:{...answer,kind:"exercise"}})});
   const r=response();await handler(req(),r);assert.equal(r.code,502);assert.equal(r.body.food,undefined);
+});
+test("explicit missing-photo additions preserve the record without calling AI or spending quota",async()=>{
+  let calls=0,quota=0;
+  const handler=createAnalysisHandler({concierge:true,env,clientFactory:()=>({auth:{getUser:async()=>({data:{user:{id:"u"}}})},rpc:async()=>{quota++;return {data:19};}}),generate:async()=>{calls++;return {output:answer};}});
+  for(const message of ['사진에 없는 치킨도 1800kcal 추가해 줘','사진은 없는데 어제 먹은 피자 기록해줘','사진 없이 운동 기록해줘','사진 안 찍었어. 추가해줘','add a food not in the photo']){
+    const r=response();await handler(req({message,current:answer}),r);assert.equal(r.code,200);assert.equal(r.body.shouldUpdate,false);assert.equal(r.body.food.kcal,500);assert.match(r.body.reply,/사진/);
+  }
+  assert.equal(calls,0);assert.equal(quota,0);
+  assert.equal(needsPhotoEvidence('사진 속 밥은 두 공기였어'),false);
 });

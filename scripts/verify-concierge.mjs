@@ -60,6 +60,7 @@ try {
   await expect(page.locator('.from-assistant')).toHaveCount(3,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   assert.equal((await journal()).records[0].kcal,revisedKcal);
   await page.reload();await expect(page.locator('.from-assistant')).toHaveCount(3,{timeout:20000});
+  await expect.poll(()=>page.locator('.photo-message img').evaluate(img=>img.naturalWidth),{timeout:20000}).toBeGreaterThan(0);
   await expect(page.locator('.conversation-messages')).toContainText('흰쌀밥 두 공기');
   await page.screenshot({path:'test-results/live-conversation.png',fullPage:true});
   await page.locator('#myPageBtn').click();await expect(page.locator('.cal-big')).toContainText(revisedKcal.toLocaleString());

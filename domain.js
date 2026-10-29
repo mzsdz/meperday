@@ -36,6 +36,10 @@ export function validateJournal(value) {
   )
     throw Error("백업 구조를 확인해 주세요.");
   value.weights ??= [];
+  value.captures ??= [];
+  value.profile ??= {};
+  if(typeof value.profile !== 'object' || Array.isArray(value.profile)) throw Error("내 정보 형식을 확인해 주세요.");
+  if (!Array.isArray(value.captures)) throw Error("사진 대화 형식을 확인해 주세요.");
   if (!Array.isArray(value.weights))
     throw Error("몸무게 기록 형식을 확인해 주세요.");
   for (const row of value.weights)
@@ -47,7 +51,12 @@ export function validateJournal(value) {
         row.kg > 1000)
     )
       throw Error("몸무게 수치를 확인해 주세요.");
-  for (const rows of [value.records, value.exercises, value.weights])
+  for (const row of value.captures) {
+    if (!Array.isArray(row.messages) || row.messages.length > 50 || row.messages.some(m => !["user", "assistant", "system"].includes(m.role) || typeof m.text !== "string" || m.text.length > 1500)) throw Error("사진 대화 내용을 확인해 주세요.");
+    if(row.recordKind && !['food','exercise','weight'].includes(row.recordKind)) throw Error("사진 종류를 확인해 주세요.");
+    if(row.analysis && (!['food','exercise','weight','unknown'].includes(row.analysis.kind) || !Array.isArray(row.analysis.assumptions) || row.analysis.assumptions.some(s=>typeof s!=='string') || (row.analysis.kind==='food' && (!row.analysis.food || !row.analysis.food.nutrients)) || (row.analysis.kind==='exercise' && !row.analysis.exercise))) throw Error("사진 분석 형식을 확인해 주세요.");
+  }
+  for (const rows of [value.records, value.exercises, value.weights, value.captures])
     for (const row of rows) {
       if (
         !row ||

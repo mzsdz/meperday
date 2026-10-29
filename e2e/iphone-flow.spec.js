@@ -1,3 +1,4 @@
+import {mine,addManual,editRecord} from "./helpers.js";
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
@@ -10,8 +11,7 @@ const png = fileURLToPath(
 const journal = (page) =>
   page.evaluate(() => JSON.parse(localStorage.getItem("meday-mvp-v02")));
 async function addFood(page) {
-  await page.locator('[data-open-meal="breakfast"]').click();
-  await page.locator('[data-add-meal="breakfast"]').click();
+  await addManual(page,"food");
 }
 async function upload(page, file = jpeg) {
   await page.locator("#foodFile").setInputFiles(file);
@@ -35,15 +35,14 @@ test("food: EXIF, orientation, photo replacement, all optional fields, cancel/de
       .evaluate((el) => el.naturalHeight > el.naturalWidth),
   ).toBe(true);
   await page.locator('#foodForm button[type="submit"]').click();
-  await page.locator('[data-open-meal="breakfast"]').click();
-  await page.locator("[data-edit]").click();
+  await editRecord(page,"food");
   await upload(page, png);
   await expect(page.locator("#foodTime")).toHaveValue("");
   await page.locator("#foodName").fill("수정한 식사");
   await page.locator("#foodKcal").fill("250");
   await page.locator("#foodPortion").fill("반 접시");
   await page.locator("#foodTime").fill("12:34");
-  await page.locator("#foodMeal").selectOption("lunch");
+
   const previous = new Date(
     (await page.locator("#foodDate").inputValue()) + "T12:00:00Z",
   );
@@ -61,10 +60,11 @@ test("food: EXIF, orientation, photo replacement, all optional fields, cancel/de
   expect(rect.y + rect.height).toBeLessThanOrEqual(401);
   await submit.click();
   await page.reload();
+  await mine(page);
   const saved = (await journal(page)).records[0];
   expect(saved).toMatchObject({
     name: "수정한 식사",
-    meal: "lunch",
+    meal: "entry",
     date: recordDate,
     time: "12:34",
     kcal: 250,
@@ -74,14 +74,14 @@ test("food: EXIF, orientation, photo replacement, all optional fields, cancel/de
     note: "메모",
   });
   await page.locator('[data-day-shift="-1"]').click();
-  await page.locator('[data-open-meal="lunch"]').click();
-  await page.locator("[data-edit]").click();
+  await editRecord(page,"food");
   page.once("dialog", (d) => d.dismiss());
   await page.locator("#deleteFood").click();
   expect((await journal(page)).records).toHaveLength(1);
   page.once("dialog", (d) => d.accept());
   await page.locator("#deleteFood").click();
   await page.reload();
+  await mine(page);
   expect((await journal(page)).records).toHaveLength(0);
   expect(errors).toEqual([]);
 });
@@ -90,27 +90,30 @@ test("exercise: screenshot-only create, edit, zero values, delete and reload", a
   page,
 }) => {
   await page.goto("/");
-  await page.locator('[data-add="exercise"]').first().click();
+  await addManual(page,"exercise");
   await page.locator("#exFile").setInputFiles(png);
   await expect(page.locator("#exPhotoPreview img")).toBeVisible();
   await page.locator('#exerciseForm button[type="submit"]').click();
   await page.reload();
-  await page.locator("[data-exercise]").click();
+  await mine(page);
+  await editRecord(page,"exercise");
   await page.locator("#exType").fill("걷기");
   await page.locator("#exMinutes").fill("30");
   await page.locator("#exCalories").fill("0");
   await page.locator('#exerciseForm button[type="submit"]').click();
   await page.reload();
+  await mine(page);
   expect((await journal(page)).exercises[0]).toMatchObject({
     type: "걷기",
     minutes: 30,
     calories: 0,
     time: "",
   });
-  await page.locator("[data-exercise]").click();
+  await editRecord(page,"exercise");
   page.once("dialog", (d) => d.accept());
   await page.locator("#deleteExercise").click();
   await page.reload();
+  await mine(page);
   expect((await journal(page)).exercises).toHaveLength(0);
 });
 
@@ -151,6 +154,7 @@ test("invalid replacement preserves photo/time; missing MIME is decoded; failed 
   await page.locator('#foodForm button[type="submit"]').click();
   await expect(page.locator("#overlay")).toHaveClass(/hidden/);
   await page.reload();
+  await mine(page);
   expect((await journal(page)).records).toHaveLength(1);
 });
 
@@ -185,7 +189,7 @@ test("image processing blocks premature save; dismissing form never updates the 
   await page.locator("#foodForm").evaluate((form) => form.requestSubmit());
   expect(await journal(page)).toBeNull();
   await page.getByRole("button", { name: "닫기", exact: true }).click();
-  await page.locator('[data-add="exercise"]').first().click();
+  await addManual(page,"exercise");
   await page.locator("#exType").fill("기다리는 동안 직접 기록");
   await expect
     .poll(() => page.evaluate(() => window.finishedPhotoLoads || 0))
@@ -193,6 +197,7 @@ test("image processing blocks premature save; dismissing form never updates the 
   await expect(page.locator("#exPhotoPreview img")).toHaveCount(0);
   await page.locator('#exerciseForm button[type="submit"]').click();
   await page.reload();
+  await mine(page);
   const saved = await journal(page);
   expect(saved.records).toHaveLength(0);
   expect(saved.exercises[0].photo).toBeNull();

@@ -1,0 +1,32 @@
+import { test, expect } from "@playwright/test";
+import { mine, addManual } from "./helpers.js";
+import { fileURLToPath } from "node:url";
+const photo=fileURLToPath(new URL("./fixtures/oriented-exif.jpg",import.meta.url));
+for (const width of [320,393,430]) test(`${width}px one photo home keeps a complete record and conversation without meal labels`,async({page},testInfo)=>{
+  await page.setViewportSize({width,height:736});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');await expect(page.locator('#conciergePhoto')).toHaveCount(1);
+  await expect(page.locator('#modeSwitch')).toBeHidden();await expect(page.locator('.cal-big')).toHaveCount(0);await expect(page.locator('#pointsButton')).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+  if(width===393) await page.screenshot({path:testInfo.outputPath('home.png')});
+  await page.locator('#conciergePhoto').setInputFiles(photo);await expect(page.locator('.photo-message img')).toBeVisible();
+  await page.reload();await expect(page.locator('.photo-message img')).toBeVisible();
+  await page.locator('#conciergeMessage').fill('밥 두 공기였어');await page.locator('#conciergeForm button').click();
+  await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');
+  await page.locator('[data-classify="food"]').click();await mine(page);
+  await expect(page.locator('.timeline-row')).toContainText('08:09');await expect(page.locator('.timeline-row')).toContainText('열량 미확인');
+  await expect(page.getByRole('combobox',{name:'구분'})).toHaveCount(0);
+  await page.locator('.timeline-row').click();await expect(page.locator('.conversation-messages')).toContainText('밥 두 공기였어');
+  expect(errors).toEqual([]);
+});
+test('my page keeps an optional personal energy reference, chronological food/activity, and no exercise double counting',async({page},testInfo)=>{
+  await page.goto('/');await mine(page);await page.locator('#profileButton').click();
+  await page.locator('#profileAge').fill('30');await page.locator('#profileSex').selectOption('male');await page.locator('#profileHeight').fill('180');await page.locator('#profileWeight').fill('80');await page.locator('#profileActivity').selectOption('low');await page.locator('#profileForm button[type="submit"]').click();
+  await expect(page.locator('.energy-comparison')).toContainText('2,136');
+  await addManual(page,'food');await page.locator('#foodName').fill('직접 남긴 점심');await page.locator('#foodKcal').fill('500');await page.locator('#foodForm button[type="submit"]').click();
+  await addManual(page,'exercise');await page.locator('#exType').fill('걷기');await page.locator('#exTime').fill('08:00');await page.locator('#exCalories').fill('180');await page.locator('#exerciseForm button[type="submit"]').click();
+  await expect(page.locator('.timeline-row').first()).toContainText('08:00');await expect(page.locator('.timeline-row').last()).toContainText('시간 미입력');
+  await expect(page.locator('.daily-energy .cal-big')).toContainText('500');await expect(page.locator('.energy-comparison')).toContainText('2,136');await expect(page.locator('.activity-summary')).toContainText('180');
+  await page.screenshot({path:testInfo.outputPath('my-page.png'),fullPage:true});
+  await page.reload();await mine(page);await expect(page.locator('.energy-comparison')).toContainText('2,136');
+  await page.locator('#profileButton').click();await page.locator('#energyMode').selectOption('none');await page.locator('#profileForm button[type="submit"]').click();await expect(page.locator('.energy-comparison')).toHaveCount(0);
+});

@@ -1,5 +1,9 @@
 import { analyzePhoto } from "./analysis-client.js";
-import { loadPoints } from "./points.js";
+import { askConcierge } from "./concierge-client.js";
+import { applyConcierge, linkedRecord, manualCapture, recordContext } from "./concierge-domain.js";
+import { renderConcierge } from "./concierge-view.js";
+import { renderDaily } from "./timeline-view.js";
+import { ACTIVITIES, energyReference } from "./energy.js";
 import exifr from "exifr";
 import { compressImage } from "./photos.js";
 import {
@@ -235,6 +239,8 @@ import {
       records: [],
       exercises: [],
       weights: [],
+      captures: [],
+      profile: {},
       evaluations: {},
       dayEvaluations: {},
       goals: { ...GOALS_DEFAULT },
@@ -253,14 +259,15 @@ import {
     }
   }
   data.weights ??= [];
+  data.captures ??= [];
+  data.profile ??= {};
+  let surface = "home", activeCaptureId = data.captures.at(-1)?.id || null, conciergeWorking = false;
   let selected = TODAY,
     view = "day",
     overlayOpen = false,
     recOffset = 0;
   const $ = (s) => document.querySelector(s);
   let loadedUserId = null,
-    pointsState = null,
-    pointsUnavailable = false,
     aiReady = false,
     refreshPhotoAnalysis = () => {};
   function updateAnalysisButton(button, state, kind) {
@@ -311,11 +318,12 @@ import {
     try {
       if (accountPending)
         throw Error("계정 기록을 불러오고 있어요. 잠시 후 다시 저장해 주세요.");
+      syncCaptures();
       if (store) {
         await store.save(data);
       } else localStorage.setItem(KEY, JSON.stringify(data));
       committed = structuredClone(data);
-      if (store) void refreshPoints();
+
       return true;
     } catch (error) {
       data = structuredClone(committed);
@@ -351,7 +359,8 @@ import {
     return (
       recordsOn(date).length ||
       exercisesOn(date).length ||
-      data.weights.some((r) => r.date === date)
+      data.weights.some((r) => r.date === date) ||
+      data.captures.some((r) => r.date === date)
     );
   }
   function total(rows) {
@@ -406,24 +415,7 @@ import {
   function groupRows(rows, meal) {
     return rows.filter((r) => r.meal === meal);
   }
-  function renderDay() {
-    const rows = recordsOn(selected),
-      cal = total(rows),
-      exercise = exercisesOn(selected);
-    let mealHTML = MEALS.map(([meal, lab]) => {
-      let rs = groupRows(rows, meal),
-        k = total(rs),
-        tm = rs.length ? rs[0].time : "";
-      if (meal === "snack" && !rs.length) return "";
-      return `<button class="meal-row" data-open-meal="${meal}"><div class="meal-label"><b>${lab}</b><span> </span></div><div class="thumb">${rs.length ? thumb(rs[0]) : "＋"}</div><div class="meal-desc"><div class="name">${rs.length ? esc(rs.map((x) => x.name).join(" · ")) : `${lab} 기록하기`}</div>${rs.length ? `<div class="kcal">${rs.some((r) => r.kcal !== null && r.kcal !== undefined) ? `약 ${fmtInt(k)} <span class="small">kcal</span>` : "열량 미확인"}</div>` : '<div class="no-data">사진을 추가해 보세요</div>'}</div><div class="chevron">›</div></button>`;
-    }).join("");
-    let unknownKcal = rows.some((r) => r.kcal === null || r.kcal === undefined);
-    let knownKcal = rows.some((r) => r.kcal !== null && r.kcal !== undefined);
-    let base = rows.length
-      ? `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-line"><div class="cal-big">${knownKcal ? fmtInt(cal) : "—"}<span> kcal${unknownKcal && knownKcal ? " + 미확인" : ""}</span></div></div><div class="hint" style="margin-top:6px">기록된 식사 기준 · 추정치 포함${unknownKcal ? " · 열량 미확인 기록 있음" : ""} <button class="text-button" id="dayEvalButton">${data.dayEvaluations[selected] ? "하루 느낌 수정" : "하루 느낌 기록 (선택)"}</button></div></div>`
-      : `<div class="card cal-card"><div class="eyebrow">${selected === TODAY ? "오늘까지" : "이 날"} 섭취한 칼로리</div><div class="cal-big">— <span>kcal</span></div><div class="hint">아직 이 날의 식사 기록이 없어요</div></div>`;
-    return `<div class="date-nav"><button class="ghost-date" id="goToday">${selected === TODAY ? "오늘" : "오늘로 이동"}</button><strong class="date-title">${fmtDay(selected)}</strong><div class="date-arrows"><button data-day-shift="-1" aria-label="이전 날">‹</button><button data-day-shift="1" aria-label="다음 날">›</button></div></div>${base}${!rows.length ? `<div class="card empty"><div><h3>사진 한 장이면 충분해</h3><p>나머지는 원할 때만 기록해요.</p></div><button class="button" data-add="food">사진 올리기</button></div>` : ""}<div class="section-header"><h2>식사</h2><span class="subtle">누르면 상세 기록</span></div><div class="meal-list">${mealHTML}</div><div class="section-header"><h2>운동 기록</h2><button class="text-button" data-add="exercise">+ 운동 추가</button></div>${exercise.length ? `<div class="card activity-list">${exercise.map((e) => `<button class="item-row" style="border:0;background:white;width:100%;text-align:left" data-exercise="${e.id}"><div><strong>🏃 ${esc(e.type)}</strong><small>${e.minutes ? `${e.minutes}분` : ""}${e.calories ? ` · ${e.calories}kcal(운동앱 추정)` : ""}</small></div><span>›</span></button>`).join("")}</div>` : `<button class="action-card" data-add="exercise"><span class="action-icon">⌁</span><div><strong>운동 앱 캡처 올리기</strong><small>운동 종류 · 시간 · 소모 열량 (선택)</small></div><span class="chevron" style="margin-left:auto">›</span></button>`}${renderWeights()}${rows.length ? `<div class="card nutrients-card" style="margin-top:15px"><div class="line-action"><strong>${selected === TODAY ? "오늘의 영양소" : "이 날의 영양소"}</strong><span class="muted micro">하루 기준 대비</span></div>${showNutrition(rows)}<div class="nutrient-note">검은 선 = 설정한 하루 기준 100% · 막대는 145%까지 표시<br>추정 영양정보만 합산하며, 일부 음식의 영양소는 알 수 없어요.</div></div><div class="card"><div class="line-action" style="margin-bottom:15px"><strong>주의가 필요한 항목</strong><span class="muted micro">섭취 상한과 비교</span></div>${showNutrition(rows, "warning")}<div class="nutrient-note">나트륨·포화지방은 100%를 채우는 목표가 아니라 가급적 넘지 않을 상한이에요.</div></div>` : ""}<button class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지? ✨</strong><small>오늘의 영양 상태와 내 입맛을 함께 고려해요</small></span><span>›</span></button>${rows.some((r) => r.sample) ? '<p class="record-note">일부 기록은 이전 대화에서 옮긴 <b>추정치</b>예요. 수정·삭제할 수 있어요.</p>' : ""}`;
-  }
+  function renderDay() { return renderDaily({data,selected,today:TODAY,fmtDay,fmtInt,esc,calorieSummary,showNutrition}) + '<button type="button" class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지?</strong><small>기록을 바탕으로 메뉴 살펴보기</small></span><span>›</span></button>'; }
   function renderWeights() {
     const rows = data.weights.filter((r) => r.date === selected);
     return `<div class="section-header"><h2>몸무게 인증</h2><button type="button" class="text-button" data-add="weight">+ 인증 추가</button></div>${rows.length ? `<div class="card activity-list">${rows.map((r) => `<button type="button" class="weight-row" data-weight="${esc(r.id)}"><span class="thumb">${r.photo ? `<img src="${esc(r.photo)}" alt="몸무게 인증 사진">` : "⚖️"}</span><span><strong>${r.kg == null ? "몸무게 인증" : `${esc(r.kg)} kg`}</strong><small>${esc(r.time || "사진으로 남긴 기록")}</small></span><span class="chevron">›</span></button>`).join("")}</div>` : '<button type="button" class="action-card" data-add="weight"><span class="action-icon">⚖️</span><span><strong>체중계 사진 남기기</strong><small>사진 한 장이면 완료 · 몸무게 입력은 선택</small></span><span class="chevron">›</span></button>'}`;
@@ -478,7 +470,7 @@ import {
                   .map((r) => r.name)
                   .join(" · "),
               )
-            : "기록 없음"
+            : hasRecordsOn(d) ? "사진·활동 기록" : "기록 없음"
         }</small></span><strong>${calorieSummary(rr).value === null ? "열량 미확인" : fmtInt(total(rr)) + " kcal" + (calorieSummary(rr).partial ? " + 미확인" : "")}</strong></button>`;
       })
       .join(
@@ -508,11 +500,11 @@ import {
     return `<div class="date-nav"><button class="ghost-date" id="goToday">이번 달</button><strong class="date-title">${year}년 ${month + 1}월</strong><div class="date-arrows"><button data-month-shift="-1">‹</button><button data-month-shift="1">›</button></div></div><div class="card"><div class="month-grid">${DAY.map((l) => `<span class="month-head">${l}</span>`).join("")}${prev}${days
       .map((x) => {
         let n = total(recordsOn(x));
-        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:${n > data.goals.kcal * 1.2 ? "#d98b70" : "#75ab85"}"></span>` : '<span style="height:5px"></span>'}</button>`;
+        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:#75ab85"></span>` : '<span style="height:5px"></span>'}</button>`;
       })
       .join(
         "",
-      )}</div><div class="chart-note">초록 점은 식사·운동·몸무게 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => hasRecordsOn(x)).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
+      )}</div><div class="chart-note">초록 점은 사진·식사·운동·몸무게 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => hasRecordsOn(x)).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
       .map((x) => {
         let n = total(recordsOn(x));
         return `<div class="bar-col" style="height:140px;justify-content:end;gap:0"><div class="bar-wrap" style="height:110px"><div class="bar ${x === selected ? "on" : ""}" style="width:85%;height:${n ? Math.round((n / max) * 100) : 2}%"></div></div>${dateObj(x).getDate() % 5 === 0 ? `<span class="label" style="font-size:8px">${dateObj(x).getDate()}</span>` : '<span class="label" style="font-size:8px;opacity:0">-</span>'}</div>`;
@@ -522,26 +514,121 @@ import {
       )}</div><div class="chart-note">기록이 없는 날의 칼로리는 알 수 없어요.</div></div>`;
   }
   function render() {
-    $("#main").innerHTML = accountPending
-      ? '<div class="card" role="status"><h3>계정 기록 연결 중</h3><p class="disclaimer">연결이 끝나면 기록을 표시해요. 연결 오류는 상단에서 다시 연결할 수 있어요.</p></div>'
-      : view === "day"
-        ? renderDay()
-        : view === "week"
-          ? renderWeek()
-          : renderMonth();
-    document
-      .querySelectorAll("#modeSwitch button")
-      .forEach((el) =>
-        el.classList.toggle("selected", el.dataset.view === view),
-      );
-    $("#homeBtn").classList.toggle("active", view === "day");
-    $("#statsBtn").classList.toggle("active", view === "week");
-    $("#calendarBtn").classList.toggle("active", view === "month");
-    document
-      .querySelectorAll(
-        "#modeSwitch button,.bottom-nav button,#settingsButton,#pointsButton",
-      )
-      .forEach((button) => (button.disabled = accountPending));
+    const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
+    $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
+      ? renderConcierge({capture,working:conciergeWorking,esc,loggedIn:!!store}) : view === "day" ? renderDay() : view === "week" ? renderWeek() : renderMonth();
+    $("#modeSwitch").hidden = surface !== "mine";
+    document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
+    $("#homeBtn").classList.toggle("active",surface==="home");
+    $("#myPageBtn").classList.toggle("active",surface==="mine");
+    document.querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton").forEach(b=>b.disabled=accountPending);
+    if(surface === "home" && !accountPending) bindConciergeHome();
+  }
+  function syncCaptures() {
+    data.captures = data.captures.filter(c => !c.recordKind || linkedRecord(data,c));
+    for (const c of data.captures) {
+      const r=linkedRecord(data,c);
+      if (r) {
+        c.photo=r.photo; c.photoPath=r.photoPath; c.date=r.date; c.time=r.time || "";
+        if(c.analysis?.kind===c.recordKind) {
+          if(c.recordKind==='food') c.analysis.food={...c.analysis.food,name:r.name||null,kcal:r.kcal??null,nutrients:{...c.analysis.food.nutrients,...r.nutrients}};
+          if(c.recordKind==='exercise') c.analysis.exercise={...c.analysis.exercise,type:r.type||null,minutes:r.minutes??null,calories:r.calories??null};
+          if(c.recordKind==='weight')c.analysis.weightKg=r.kg??null;
+        }
+      }
+    }
+    if (activeCaptureId && !data.captures.some(c=>c.id===activeCaptureId)) activeCaptureId=null;
+  }
+  function currentCapture() { return data.captures.find(c=>c.id===activeCaptureId); }
+  async function idleForReply() {
+    const deadline=Date.now()+10000;
+    while(busy && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,30));
+    if (busy) throw Error("기록을 저장 중이에요. 저장이 끝난 뒤 다시 설명해 주세요.");
+  }
+  function appendChat(capture,role,text) {
+    capture.messages.push({role,text:String(text).slice(0,1500)});
+    capture.messages=capture.messages.slice(-50);
+  }
+  async function runConcierge(id,message="") {
+    if (conciergeWorking) return;
+    let capture=data.captures.find(c=>c.id===id);
+    if(!capture) return;
+    const existing=linkedRecord(data,capture);
+    if(!capture.analysis && existing) capture.analysis=recordContext(existing,capture.recordKind);
+    if(message) { appendChat(capture,"user",message); if(!(await save())) {render();return;} }
+    const baseline=JSON.stringify(linkedRecord(data,capture));
+    conciergeWorking=true; render();
+    try {
+      const result=await askConcierge(capture,message);
+      await idleForReply();
+      capture=data.captures.find(c=>c.id===id); if(!capture)return;
+      if(JSON.stringify(linkedRecord(data,capture))!==baseline) {
+        appendChat(capture,"system","답변을 준비하는 동안 기록이 바뀌어서, 직접 수정한 내용을 그대로 남겼어요.");
+      } else {
+        const updated=applyConcierge(data,capture,result);
+        appendChat(capture,"assistant",result.reply);
+        if(updated) appendChat(capture,"system","기록에 반영했어요. 더 설명하지 않아도 완료예요.");
+      }
+      await save();
+    } catch(error) {
+      await idleForReply().catch(()=>{});
+      capture=data.captures.find(c=>c.id===id);
+      if(capture && !busy) {appendChat(capture,"system",error.message||"답변을 가져오지 못했어요. 사진은 그대로 남아 있어요.");await save();}
+    } finally { conciergeWorking=false; render(); }
+  }
+  function bindConciergeHome() {
+    const input=$("#conciergePhoto");
+    if(input) input.onchange=async()=>{
+      const file=input.files?.[0]; if(!file || conciergeWorking || busy)return;
+      conciergeWorking=true; render();
+      try {
+        const [photo,tags]=await Promise.all([compressImage(file),exifr.parse(file,{pick:["DateTimeOriginal"],reviveValues:false}).catch(()=>null)]);
+        const capture={id:uid(),date:TODAY,time:captureTime(tags),photo,messages:[{role:"system",text:"사진을 보관했어요. 추가 설명 없이도 기록은 완료돼요."}]};
+        data.captures.push(capture);activeCaptureId=capture.id;
+        if(!(await save())) {render();return;}
+        conciergeWorking=false;render();
+        if(store) await runConcierge(capture.id);
+      } catch(error) {toast(error.message||"사진을 읽지 못했어요. 다시 선택해 주세요.");}
+      finally {conciergeWorking=false;render();}
+    };
+    const form=$("#conciergeForm");
+    if(form) form.onsubmit=async e=>{e.preventDefault();const message=$("#conciergeMessage").value.trim();if(message)await runConcierge(activeCaptureId,message);};
+  }
+  async function openConversation(id,kind) {
+    let capture=data.captures.find(c=>c.id===id);
+    if(!capture) {
+      const r=({food:data.records,exercise:data.exercises,weight:data.weights}[kind]||[]).find(r=>r.id===id);
+      if(!r)return;
+      if(!r.photo){if(kind==='food')showFoodForm('entry',r);else if(kind==='exercise')showExerciseForm(r);else showWeightForm(r);return;}
+      capture={id:r.id,date:r.date,time:r.time||"",photo:r.photo,photoPath:r.photoPath,recordKind:kind,messages:[{role:"system",text:"전에 남긴 사진 기록이에요. 먹은 양이나 빠진 정보를 편하게 말해 주세요."}]};
+      data.captures.push(capture); if(!(await save()))return;
+    }
+    surface="home";activeCaptureId=id;closeSheet();render();window.scrollTo(0,0);
+  }
+  async function classifyCapture(kind) {
+    const capture=currentCapture();if(!capture)return;
+    manualCapture(data,capture,kind);
+    appendChat(capture,"system",`${({food:'음식',exercise:'운동',weight:'몸무게'})[kind]} 사진으로 기록했어요. 수치나 메모는 비워 두어도 괜찮아요.`);
+    if(await save())render();
+  }
+  function editConversationRecord() {
+    const c=currentCapture(),r=c&&linkedRecord(data,c);if(!r)return;
+    if(c.recordKind==='food')showFoodForm('entry',r);else if(c.recordKind==='exercise')showExerciseForm(r);else showWeightForm(r);
+  }
+  async function deleteConversation() {
+    const id=activeCaptureId;if(!id || !confirm("사진과 연결된 기록·대화를 삭제할까요?"))return;
+    for(const key of ['captures','records','exercises','weights'])data[key]=data[key].filter(r=>r.id!==id);
+    activeCaptureId=null;if(await save())render();
+  }
+  function showProfile() {
+    const p=data.profile||{};
+    showSheet(`${head("내 정보", "입력하고 싶은 정보만 남겨요. 사진 기록에는 필요하지 않아요.")}<form id="profileForm"><div class="field"><label for="energyMode">칼로리 비교 기준</label><select id="energyMode"><option value="estimate" ${p.mode==='estimate'||!p.mode?'selected':''}>내 정보로 유지 소비량 추정</option><option value="manual" ${p.mode==='manual'?'selected':''}>내가 정한 기준 사용</option><option value="none" ${p.mode==='none'?'selected':''}>비교 없이 기록만 보기</option></select></div><div class="form-grid"><div class="field"><label for="profileAge">나이 · 선택</label><input id="profileAge" type="number" min="1" max="120" placeholder="만 나이" value="${esc(p.age??'')}"></div><div class="field"><label for="profileSex">계산용 성별 · 선택</label><select id="profileSex"><option value="">선택 안 함</option><option value="female" ${p.sex==='female'?'selected':''}>여성</option><option value="male" ${p.sex==='male'?'selected':''}>남성</option></select></div><div class="field"><label for="profileHeight">키 (cm) · 선택</label><input id="profileHeight" type="number" min="100" max="250" step="any" value="${esc(p.heightCm??'')}"></div><div class="field"><label for="profileWeight">몸무게 (kg) · 선택</label><input id="profileWeight" type="number" min="20" max="500" step="any" value="${esc(p.weightKg??'')}"></div></div><div class="field"><label for="profileActivity">평소 활동량 · 선택</label><select id="profileActivity"><option value="">선택 안 함</option>${ACTIVITIES.map(([v,label])=>`<option value="${v}" ${p.activity===v?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label for="profileManual">직접 정한 하루 기준 (kcal) · 선택</label><input id="profileManual" type="number" min="1" max="10000" value="${esc(p.manualKcal??'')}"></div><p class="disclaimer">휴식대사량은 가만히 있을 때의 소비량 추정이며, 그대로 섭취 목표로 삼지 않아요. 유지 소비량은 평소 활동량을 함께 고려한 참고치예요.</p><p class="disclaimer">Mifflin–St Jeor식과 활동계수를 사용한 19세 이상 성인 참고값이에요. 임신·수유 중에는 적용하지 않으며, 개인의 처방이나 실제 측정값이 아니에요. 운동 캡처 소모량을 중복 가산하지 않아요.</p><div class="inline-actions"><button type="button" class="button secondary" data-close>닫기</button><button type="submit" class="button">내 정보 저장</button></div><button type="button" class="text-button full" id="clearProfile">내 정보 지우기</button></form>`);
+    $("#profileForm").onsubmit=async e=>{
+      e.preventDefault();const number=id=>$(id).value===''?null:Number($(id).value);
+      data.profile={mode:$("#energyMode").value,age:number('#profileAge'),sex:$("#profileSex").value,heightCm:number('#profileHeight'),weightKg:number('#profileWeight'),activity:$("#profileActivity").value,manualKcal:number('#profileManual')};
+      if(!(await save()))return;closeSheet();render();toast("내 정보를 저장했어요.");
+    };
+    $("#clearProfile").onclick=async()=>{data.profile={};if(await save()){closeSheet();render();toast("내 정보를 지웠어요.");}};
   }
   let priorFocus = null;
   function closeSheet() {
@@ -694,13 +781,13 @@ import {
       )
       .join("")}</div></details>`;
   }
-  function showFoodForm(meal = "breakfast", r = null) {
+  function showFoodForm(meal = "entry", r = null) {
     const isEdit = !!r;
     let state = { photo: r?.photo || null, analysis: r?.analysis || null };
     const time = r?.time || "",
       date = r?.date || selected;
     showSheet(
-      `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><div class="field"><label for="foodMeal">구분</label><select id="foodMeal">${MEALS.map(([k, l]) => `<option value="${k}" ${meal === k ? "selected" : ""}>${l}</option>`).join("")}</select></div><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">분석 버튼을 누르면 사진을 AI 제공자에게 전송해요. 결과는 추정값이며 직접 수정할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
+      `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><input id="foodMeal" type="hidden" value="entry"><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" hidden class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">수치는 직접 수정할 수 있어요. 사진 대화에서도 먹은 양을 설명할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
     );
     bindPhotoInput({
       input: "#foodFile",
@@ -812,6 +899,7 @@ import {
       selected = obj.date;
       if (!(await save())) return;
       closeSheet();
+      surface = "mine";
       view = "day";
       render();
       toast("식사를 기록했어 ✓");
@@ -866,13 +954,14 @@ import {
       if (!(await save())) return;
       selected = record.date;
       closeSheet();
+      surface = "mine";
       view = "day";
       render();
       toast("몸무게 인증을 저장했어요.");
     };
     if (r)
       $("#deleteWeight").onclick = async () => {
-        if (!confirm("이 몸무게 인증 기록을 삭제할까요? 적립 이력은 유지돼요."))
+        if (!confirm("이 몸무게 인증 기록을 삭제할까요? 사진과 선택한 수치도 함께 삭제돼요."))
           return;
         data.weights = data.weights.filter((x) => x.id !== r.id);
         if (!(await save())) return;
@@ -984,7 +1073,7 @@ import {
   function showExerciseForm(r = null) {
     let state = { photo: r?.photo || null };
     showSheet(
-      `${head(r ? "운동 수정" : "운동 기록", "운동 앱 화면 캡처만 올려도 괜찮아요.")}<form id="exerciseForm"><div class="form-grid"><div class="field"><label>날짜</label><input id="exDate" type="date" value="${r?.date || selected}" required /></div><div class="field"><label>기록 시각</label><input id="exTime" type="time" value="${r?.time || ""}" /></div></div><label class="uploadbox" for="exFile"><span class="big">🏃</span><strong>운동 앱 캡처 선택</strong><small>AI 분석은 서버를 연결했을 때 사용 가능</small><input id="exFile" type="file" accept="image/*"></label><div id="exPhotoPreview">${state.photo ? `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">` : ""}</div><button type="button" class="button secondary full" id="exAnalyze" ${!state.photo ? "disabled" : ""}>✦ 캡처에서 운동 정보 추출</button><p class="disclaimer" id="exStatus">운동 종류, 시간, 소모 열량은 직접 입력해도 돼요.</p><div class="field"><label>운동 종류</label><input id="exType" value="${esc(r?.type || "")}" placeholder="예: 걷기, 홈트, 골프 연습 (선택)" /></div><div class="form-grid"><div class="field"><label>운동 시간 (분)</label><input id="exMinutes" type="number" min="0" value="${r?.minutes ?? ""}" placeholder="선택" /></div><div class="field"><label>소모 열량 (kcal)</label><input id="exCalories" type="number" min="0" value="${r?.calories ?? ""}" placeholder="선택" /></div></div><div class="inline-actions"><button type="button" data-close class="button secondary">취소</button><button type="submit" class="button">저장</button></div>${r ? '<button type="button" class="text-button" id="deleteExercise" style="margin-top:9px;color:#c07165;width:100%">운동 기록 삭제</button>' : ""}</form>`,
+      `${head(r ? "운동 수정" : "운동 기록", "운동 앱 화면 캡처만 올려도 괜찮아요.")}<form id="exerciseForm"><div class="form-grid"><div class="field"><label>날짜</label><input id="exDate" type="date" value="${r?.date || selected}" required /></div><div class="field"><label>기록 시각</label><input id="exTime" type="time" value="${r?.time || ""}" /></div></div><label class="uploadbox" for="exFile"><span class="big">🏃</span><strong>운동 앱 캡처 선택</strong><small>AI 분석은 서버를 연결했을 때 사용 가능</small><input id="exFile" type="file" accept="image/*"></label><div id="exPhotoPreview">${state.photo ? `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">` : ""}</div><button type="button" class="button secondary full" id="exAnalyze" hidden ${!state.photo ? "disabled" : ""}>✦ 캡처에서 운동 정보 추출</button><p class="disclaimer" id="exStatus">운동 종류, 시간, 소모 열량은 직접 입력해도 돼요.</p><div class="field"><label>운동 종류</label><input id="exType" value="${esc(r?.type || "")}" placeholder="예: 걷기, 홈트, 골프 연습 (선택)" /></div><div class="form-grid"><div class="field"><label>운동 시간 (분)</label><input id="exMinutes" type="number" min="0" value="${r?.minutes ?? ""}" placeholder="선택" /></div><div class="field"><label>소모 열량 (kcal)</label><input id="exCalories" type="number" min="0" value="${r?.calories ?? ""}" placeholder="선택" /></div></div><div class="inline-actions"><button type="button" data-close class="button secondary">취소</button><button type="submit" class="button">저장</button></div>${r ? '<button type="button" class="text-button" id="deleteExercise" style="margin-top:9px;color:#c07165;width:100%">운동 기록 삭제</button>' : ""}</form>`,
     );
     bindPhotoInput({
       input: "#exFile",
@@ -1049,6 +1138,7 @@ import {
       selected = obj.date;
       if (!(await save())) return;
       closeSheet();
+      surface = "mine";
       view = "day";
       render();
       toast("운동 기록 저장 ✓");
@@ -1199,57 +1289,9 @@ import {
       showRecs();
     };
   }
-  let pointsReadVersion = 0;
-  async function refreshPoints() {
-    const connected = store,
-      version = ++pointsReadVersion;
-    if (!connected) {
-      pointsState = null;
-      return;
-    }
-    try {
-      const result = await loadPoints(cloud);
-      if (store !== connected || version !== pointsReadVersion) return;
-      pointsState = result;
-      pointsUnavailable = false;
-      $("#pointsButton").textContent = `${fmtInt(result.balance)}P`;
-    } catch {
-      if (store !== connected || version !== pointsReadVersion) return;
-      pointsUnavailable = true;
-      $("#pointsButton").textContent = "포인트 확인";
-    }
-  }
-  async function showPoints() {
-    showSheet(
-      `${head("내 포인트", "가볍게 남긴 기록이 차곡차곡 쌓여요.")}<div id="pointsContent" role="status">포인트를 불러오고 있어요…</div>`,
-    );
-    const content = $("#pointsContent");
-    if (!store) {
-      content.innerHTML =
-        '<p class="hint">로그인 후 계정에 처음 저장하는 끼니·운동·몸무게 기록에 포인트가 적립돼요. 이 기기의 기록은 그대로 사용할 수 있어요.</p><p class="disclaimer">아침·점심·저녁·운동·몸무게 각각 하루 한 번 200P · 하루 최대 1,000P</p><p class="disclaimer">AI 분석은 포인트를 사용하지 않아요.</p><button type="button" class="button full" id="signIn">계정에 로그인하기</button>';
-      return;
-    }
-    await refreshPoints();
-    if (!content.isConnected) return;
-    if (pointsUnavailable || !pointsState) {
-      content.innerHTML =
-        '<p class="hint">포인트 내역을 불러오지 못했어요. 저장한 기록은 그대로 보관돼요.</p><button type="button" class="button secondary full" id="pointsRetry">다시 확인</button>';
-      $("#pointsRetry").onclick = showPoints;
-      return;
-    }
-    const labels = {
-      breakfast: "아침",
-      lunch: "점심",
-      dinner: "저녁",
-      exercise: "운동",
-      weight: "몸무게",
-    };
-    const p = pointsState;
-    content.innerHTML = `<div class="points-balance"><span class="eyebrow">보유 포인트</span><strong id="pointsBalance">${fmtInt(p.balance)}<small>P</small></strong></div><p id="pointsToday" class="points-today">오늘 적립 ${fmtInt(p.todayEarned)} / 1,000P</p><p class="disclaimer">아침·점심·저녁·운동·몸무게 각각 하루 한 번 200P. 한국 시간 기준 하루 최대 1,000P예요. 식사·운동은 사진만 또는 직접 기록해도 적립되고, 몸무게는 체중계 사진으로 인증해요.</p><p class="disclaimer">같은 날짜·같은 끼니·운동·몸무게는 삭제 후 다시 등록해도 중복 적립되지 않아요. 수정으로 다시 적립되지 않으며, 이미 받은 포인트는 유지돼요.</p><p class="points-free">AI 칼로리·영양소 분석과 운동 캡처 분석은 무료예요. 포인트를 차감하지 않아요.</p><h3>최근 적립 내역</h3><ul class="points-history">${p.history.length ? p.history.map((r) => `<li><span><strong>${labels[r.slot] || "기록"} 기록</strong><small>${esc(r.earned_on)} 적립${r.record_date !== r.earned_on ? ` · ${esc(r.record_date)} 기록` : ""}</small></span><b>+200P</b></li>`).join("") : '<li class="hint">아직 적립 내역이 없어요.</li>'}</ul><p class="disclaimer">기존 기록은 소급 적립되지 않아요. 현재는 포인트 적립과 내역 조회를 제공해요.</p>`;
-  }
   function showSettings() {
     showSheet(
-      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<h3>하루 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[["kcal", "칼로리", "kcal"], ...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
+      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<button type="button" class="button secondary full" data-profile>내 정보 · 칼로리 비교 기준</button><h3>영양소 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
     );
     let device = null;
     try {
@@ -1260,14 +1302,14 @@ import {
       device &&
       (device.records?.length ||
         device.exercises?.length ||
-        device.weights?.length)
+        device.weights?.length || device.captures?.length)
     ) {
       $("#sheetContent").insertAdjacentHTML(
         "beforeend",
-        `<button type="button" class="button secondary full" id="importDevice">이 기기 기록 ${(device.records?.length || 0) + (device.exercises?.length || 0) + (device.weights?.length || 0)}개를 계정에 가져오기</button><p class="disclaimer">계정 기록은 유지하고 기기에만 있는 기록을 추가해요.</p>`,
+        `<button type="button" class="button secondary full" id="importDevice">이 기기 기록 ${(device.records?.length || 0) + (device.exercises?.length || 0) + (device.weights?.length || 0) + (device.captures?.length || 0)}개를 계정에 가져오기</button><p class="disclaimer">계정 기록은 유지하고 기기에만 있는 기록을 추가해요.</p>`,
       );
       $("#importDevice").onclick = async () => {
-        for (const kind of ["records", "exercises", "weights"]) {
+        for (const kind of ["records", "exercises", "weights", "captures"]) {
           const ids = new Set(data[kind].map((row) => row.id));
           data[kind].push(
             ...(device[kind] || []).filter((row) => !ids.has(row.id)),
@@ -1374,10 +1416,6 @@ import {
       showLogin();
       return;
     }
-    if (button.id === "pointsButton") {
-      void showPoints();
-      return;
-    }
     if (button.id === "retryAccount") {
       if (
         overlayOpen &&
@@ -1395,7 +1433,11 @@ import {
       toast("계정 연결 후 다시 시도해 주세요.");
       return;
     }
+    if(button.dataset.classify) {void classifyCapture(button.dataset.classify);return;}
+    if(button.id==='editConversationRecord') {editConversationRecord();return;}
+    if(button.id==='deleteConversation') {void deleteConversation();return;}
     if (button.dataset.view) {
+      surface = "mine";
       view = button.dataset.view;
       render();
       return;
@@ -1440,7 +1482,7 @@ import {
       return;
     }
     if (button.dataset.add === "food") {
-      showFoodForm(classify());
+      showFoodForm("entry");
       return;
     }
     if (button.dataset.add === "exercise") {
@@ -1484,11 +1526,16 @@ import {
       return;
     }
     if (button.id === "homeBtn") {
+      surface = "home";
       view = "day";
       selected = TODAY;
       render();
       return;
     }
+    if (button.id === "myPageBtn") { surface = "mine"; render(); return; }
+    if (button.id === "profileButton" || button.hasAttribute("data-profile")) { showProfile(); return; }
+    if (button.id === "newPhotoFromTimeline") { surface="home"; activeCaptureId=null; render(); $("#conciergePhoto").click(); return; }
+    if (button.dataset.conversation) { void openConversation(button.dataset.conversation,button.dataset.recordKind); return; }
     if (button.id === "statsBtn") {
       view = "week";
       render();
@@ -1552,11 +1599,12 @@ import {
     }
     const connectedStore = createJournalStore(cloud, auth.session.user.id);
     data = (await connectedStore.load()) || seed();
+    activeCaptureId = data.captures?.at(-1)?.id || null;
     store = connectedStore;
     accountPending = false;
     committed = structuredClone(data);
     status.textContent = "내 계정 · 서버 저장";
-    void refreshPoints();
+
     closeSheet();
     render();
     // Refresh expiring private image URLs when idle; do not replace an open form.

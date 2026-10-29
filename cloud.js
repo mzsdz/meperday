@@ -10,6 +10,7 @@ const BUCKET = "meday-photos";
 
 export function createJournalStore(client, userId) {
   let revision = null;
+  const uploadedPaths = new Set();
   return {
     async load() {
       const { data, error } = await client
@@ -22,10 +23,12 @@ export function createJournalStore(client, userId) {
       if (!data) return null;
       const payload = structuredClone(data.payload);
       payload.weights ??= [];
+      payload.captures ??= [];
       for (const row of [
         ...payload.records,
         ...payload.exercises,
         ...payload.weights,
+        ...payload.captures,
       ]) {
         if (!row.photoPath) continue;
         const result = await client.storage
@@ -39,10 +42,12 @@ export function createJournalStore(client, userId) {
     async save(value) {
       const payload = structuredClone(value);
       payload.weights ??= [];
+      payload.captures ??= [];
       for (const row of [
         ...payload.records,
         ...payload.exercises,
         ...payload.weights,
+        ...payload.captures,
       ]) {
         if (row.photo?.startsWith("data:")) {
           const blob = await (await fetch(row.photo)).blob();
@@ -53,7 +58,7 @@ export function createJournalStore(client, userId) {
             (b) => b.toString(16).padStart(2, "0"),
           ).join("");
           const path = `${userId}/${hash}.jpg`;
-          const uploaded = await client.storage
+          const uploaded = uploadedPaths.has(path) ? {error:null} : await client.storage
             .from(BUCKET)
             .upload(path, blob, { contentType: "image/jpeg", upsert: false });
           if (
@@ -62,6 +67,7 @@ export function createJournalStore(client, userId) {
             uploaded.error.error !== "Duplicate"
           )
             throw uploaded.error;
+          uploadedPaths.add(path);
           row.photoPath = path;
         }
         delete row.photo;
@@ -82,18 +88,11 @@ export function createJournalStore(client, userId) {
           { cause: error },
         );
       revision = data.revision;
-      for (const row of [
-        ...value.records,
-        ...value.exercises,
-        ...(value.weights || []),
-      ]) {
-        const saved = [
-          ...payload.records,
-          ...payload.exercises,
-          ...payload.weights,
-        ].find((r) => r.id === row.id);
-        if (saved?.photoPath) row.photoPath = saved.photoPath;
-      }
+      for (const kind of ["records", "exercises", "weights", "captures"])
+        for (const row of value[kind] || []) {
+          const saved = payload[kind].find(r => r.id === row.id);
+          if (saved?.photoPath) row.photoPath = saved.photoPath;
+        }
       // No deletion here: concurrent uploads must never be removed by another tab.
       // Unreferenced photos are retained until an explicit maintenance operation.
     },

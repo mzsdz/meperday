@@ -1,3 +1,4 @@
+import {mine,addManual,editRecord} from "./helpers.js";
 import { test, expect } from "@playwright/test";
 const image = {
   name: "meal.png",
@@ -15,7 +16,7 @@ for (const width of [320, 393, 430]) {
         page,
       }) => {
         await page.goto("/");
-        await page.locator(`[data-add="${kind}"]`).first().click();
+        await addManual(page,kind);
         const upload = page.locator("label.uploadbox");
         const layout = await upload.evaluate((el) => {
           const box = el.getBoundingClientRect(),
@@ -62,6 +63,7 @@ for (const width of [320, 393, 430]) {
           .click();
         await expect(page.locator("#overlay")).toHaveClass(/hidden/);
         await page.reload();
+  await mine(page);
         expect(
           await page.evaluate(
             (kind) =>

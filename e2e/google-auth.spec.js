@@ -62,7 +62,9 @@ test("guest photo save remains usable when AI requires login", async ({
     }),
   );
   await page.goto("/");
-  await page.locator('[data-add="food"]').first().click();
-  await expect(page.locator("#foodAnalyze")).toBeDisabled();
-  await expect(page.locator("#foodAnalyze")).toContainText("로그인 후");
+  await page.locator("#conciergePhoto").setInputFiles({name:"guest.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=","base64")});
+  await expect(page.locator(".photo-message img")).toBeVisible();
+  await page.locator("#conciergeMessage").fill("밥 두 공기였어");
+  await page.locator('#conciergeForm button[type="submit"]').click();
+  await expect(page.locator(".conversation-messages")).toContainText("로그인해 주세요");
 });

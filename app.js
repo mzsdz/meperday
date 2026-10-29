@@ -417,7 +417,7 @@ import {
   function groupRows(rows, meal) {
     return rows.filter((r) => r.meal === meal);
   }
-  function renderDay() { return renderDaily({data,selected,today:TODAY,fmtDay,fmtInt,esc,calorieSummary,showNutrition}) + '<button type="button" class="recommend-banner" id="recommendInline"><span><strong>오늘 뭐 먹지?</strong><small>기록을 바탕으로 메뉴 살펴보기</small></span><span>›</span></button>'; }
+  function renderDay() { return renderDaily({data,selected,today:TODAY,fmtDay,fmtInt,esc,calorieSummary,showNutrition}); }
   function renderWeights() {
     const rows = data.weights.filter((r) => r.date === selected);
     return `<div class="section-header"><h2>몸무게 인증</h2><button type="button" class="text-button" data-add="weight">+ 인증 추가</button></div>${rows.length ? `<div class="card activity-list">${rows.map((r) => `<button type="button" class="weight-row" data-weight="${esc(r.id)}"><span class="thumb">${r.photo ? `<img src="${esc(r.photo)}" alt="몸무게 인증 사진">` : "⚖️"}</span><span><strong>${r.kg == null ? "몸무게 인증" : `${esc(r.kg)} kg`}</strong><small>${esc(r.time || "사진으로 남긴 기록")}</small></span><span class="chevron">›</span></button>`).join("")}</div>` : '<button type="button" class="action-card" data-add="weight"><span class="action-icon">⚖️</span><span><strong>체중계 사진 남기기</strong><small>사진 한 장이면 완료 · 몸무게 입력은 선택</small></span><span class="chevron">›</span></button>'}`;
@@ -452,7 +452,7 @@ import {
           })),
         )
       : "";
-    return `<div class="date-nav"><button class="ghost-date" id="goToday">이번 주</button><strong class="date-title">${fmtDay(start).split(" (")[0]} ~ ${fmtDay(end).split(" (")[0]}</strong><div class="date-arrows"><button data-week-shift="-7">‹</button><button data-week-shift="7">›</button></div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 열량</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>운동 기록</span><strong>${exercises.length} <span>회</span></strong></div></div><div class="section-header"><h2>이번 주 섭취 칼로리</h2><span class="subtle">열량 확인일 평균 · 부분 합계 포함</span></div><div class="card"><div class="week-chart">${days
+    return `<div class="mypage-intro"><div><span class="eyebrow">MY WEEK</span><h1>한 주의 기록</h1></div><button type="button" class="text-button" id="profileButton">내 정보</button></div><div class="date-nav"><button class="ghost-date" id="goToday">이번 주</button><strong class="date-title">${fmtDay(start).split(" (")[0]} ~ ${fmtDay(end).split(" (")[0]}</strong><div class="date-arrows"><button data-week-shift="-7">‹</button><button data-week-shift="7">›</button></div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 열량</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>운동 기록</span><strong>${exercises.length} <span>회</span></strong></div></div><div class="section-header"><h2>이번 주 섭취 칼로리</h2><span class="subtle">열량 확인일 평균 · 부분 합계 포함</span></div><div class="card"><div class="week-chart">${days
       .map((d) => {
         let n = total(recordsOn(d)),
           is = n > 0,
@@ -499,7 +499,7 @@ import {
       { length: firstWd },
       () => '<div class="day-cell empty-cell"></div>',
     ).join("");
-    return `<div class="date-nav"><button class="ghost-date" id="goToday">이번 달</button><strong class="date-title">${year}년 ${month + 1}월</strong><div class="date-arrows"><button data-month-shift="-1">‹</button><button data-month-shift="1">›</button></div></div><div class="card"><div class="month-grid">${DAY.map((l) => `<span class="month-head">${l}</span>`).join("")}${prev}${days
+    return `<div class="mypage-intro"><div><span class="eyebrow">MY MONTH</span><h1>한 달의 기록</h1></div><button type="button" class="text-button" id="profileButton">내 정보</button></div><div class="date-nav"><button class="ghost-date" id="goToday">이번 달</button><strong class="date-title">${year}년 ${month + 1}월</strong><div class="date-arrows"><button data-month-shift="-1">‹</button><button data-month-shift="1">›</button></div></div><div class="card"><div class="month-grid">${DAY.map((l) => `<span class="month-head">${l}</span>`).join("")}${prev}${days
       .map((x) => {
         let n = total(recordsOn(x));
         return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:#75ab85"></span>` : '<span style="height:5px"></span>'}</button>`;
@@ -520,8 +520,11 @@ import {
     const landing=surface==='home'&&!capture&&!accountPending;
     document.body.classList.toggle('brand-home',landing);
     $('#app').classList.toggle('brand-home',landing);
+    document.body.classList.toggle('app-view',!landing);
+    document.body.classList.toggle('journal-view',surface==='mine');
+    document.body.classList.toggle('conversation-view',surface==='home'&&!!capture);
     $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
-      ? renderConcierge({capture,working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : view === "day" ? renderDay() : view === "week" ? renderWeek() : renderMonth();
+      ? renderConcierge({capture,working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
     $("#modeSwitch").hidden = surface !== "mine";
     document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
     $("#homeBtn").classList.toggle("active",surface==="home");
@@ -1612,7 +1615,7 @@ import {
       accountPending = false;
       render();
       status.innerHTML =
-        '<span>이 기기에 저장 · 계정 동기화 꺼짐</span><button type="button" id="signIn" class="text-button">로그인</button>';
+        '<span>이 기기에 저장 중</span><button type="button" id="signIn" class="text-button">로그인</button>';
       if (loginLinkError) {
         showLoginReturnError();
       }

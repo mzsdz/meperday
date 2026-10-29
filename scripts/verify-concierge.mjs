@@ -51,7 +51,7 @@ try {
   await expect(page.locator('#conciergeMessage')).toBeEnabled();
   const initial=await journal();assert.equal(initial.records.length,1);assert.ok(initial.records[0].kcal>0);assert.equal(initial.records[0].time,'');
   const recordId=initial.records[0].id, initialKcal=initial.records[0].kcal;
-  await page.locator('#conciergeMessage').fill('사진에 나온 음식 외에 흰쌀밥 두 공기를 추가로 먹었어. 이것도 합쳐줘.');
+  await page.locator('#conciergeMessage').fill('사진 속 샐러드와 같은 구성을 두 그릇 먹었어. 이 음식의 먹은 양을 두 그릇으로 고쳐줘.');
   await page.locator('#conciergeForm button').click();
   await expect(page.locator('.from-assistant')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   const revised=await journal();assert.equal(revised.records.length,1);assert.equal(revised.records[0].id,recordId);assert.ok(revised.records[0].kcal>initialKcal);
@@ -61,7 +61,7 @@ try {
   assert.equal((await journal()).records[0].kcal,revisedKcal);
   await page.reload();await expect(page.locator('.from-assistant')).toHaveCount(3,{timeout:20000});
   await expect.poll(()=>page.locator('.photo-message img').evaluate(img=>img.naturalWidth),{timeout:20000}).toBeGreaterThan(0);
-  await expect(page.locator('.conversation-messages')).toContainText('흰쌀밥 두 공기');
+  await expect(page.locator('.conversation-messages')).toContainText('두 그릇');
   await page.screenshot({path:'test-results/live-conversation.png',fullPage:true});
   await page.locator('#myPageBtn').click();await expect(page.locator('.cal-big')).toContainText(revisedKcal.toLocaleString());
   await page.locator('#homeBtn').click();

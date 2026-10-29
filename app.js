@@ -14,6 +14,7 @@ import {
 } from "./cloud.js";
 import {
   captureTime,
+  captureDate,
   calorieSummary,
   recordedAverage,
   validateJournal,
@@ -262,6 +263,7 @@ import {
   data.captures ??= [];
   data.profile ??= {};
   let surface = "home", activeCaptureId = data.captures.at(-1)?.id || null, conciergeWorking = false;
+  let photoBatchWorking=false, photoBatchStatus="";
   let selected = TODAY,
     view = "day",
     overlayOpen = false,
@@ -516,7 +518,7 @@ import {
   function render() {
     const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
     $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
-      ? renderConcierge({capture,working:conciergeWorking,esc,loggedIn:!!store}) : view === "day" ? renderDay() : view === "week" ? renderWeek() : renderMonth();
+      ? renderConcierge({capture,working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : view === "day" ? renderDay() : view === "week" ? renderWeek() : renderMonth();
     $("#modeSwitch").hidden = surface !== "mine";
     document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
     $("#homeBtn").classList.toggle("active",surface==="home");
@@ -579,20 +581,35 @@ import {
   function bindConciergeHome() {
     const input=$("#conciergePhoto");
     if(input) input.onchange=async()=>{
-      const file=input.files?.[0]; if(!file || conciergeWorking || busy)return;
-      conciergeWorking=true; render();
+      const files=Array.from(input.files||[]); if(!files.length || conciergeWorking || photoBatchWorking || busy)return;
+      if(files.length>3){input.value="";toast("한 번에 최대 3장까지 선택할 수 있어요. 다시 선택해 주세요.");return;}
+      photoBatchWorking=true; const batchId=uid(),savedIds=[],failures=[],previousCaptureId=activeCaptureId;render();
       try {
-        const [photo,tags]=await Promise.all([compressImage(file),exifr.parse(file,{pick:["DateTimeOriginal"],reviveValues:false}).catch(()=>null)]);
-        const capture={id:uid(),date:TODAY,time:captureTime(tags),photo,messages:[{role:"system",text:"사진을 보관했어요. 추가 설명 없이도 기록은 완료돼요."}]};
-        data.captures.push(capture);activeCaptureId=capture.id;
-        if(!(await save())) {render();return;}
-        conciergeWorking=false;render();
-        if(store) await runConcierge(capture.id);
-      } catch(error) {toast(error.message||"사진을 읽지 못했어요. 다시 선택해 주세요.");}
-      finally {conciergeWorking=false;render();}
+        for(const [index,file] of files.entries()) {
+          photoBatchStatus=`사진 ${index+1}/${files.length}장 보관 중…`;render();
+          try {
+            const [photo,tags]=await Promise.all([compressImage(file),exifr.parse(file,{pick:["DateTimeOriginal"],reviveValues:false}).catch(()=>null)]);
+            await idleForReply();
+            const capturedDate=captureDate(tags),time=captureTime(tags);
+            const capture={id:uid(),batchId,date:capturedDate||TODAY,time,capturedDate,capturedTime:time,photo,messages:[{role:"system",text:capturedDate?"사진을 촬영한 날짜에 보관했어요. 추가 설명 없이도 기록은 완료돼요.":"사진을 보관했어요. 촬영 날짜를 확인할 수 없어 오늘 목록에 두었어요. 추가 설명 없이도 기록은 완료돼요."}]};
+            data.captures.push(capture);activeCaptureId=capture.id;
+            if(await save())savedIds.push(capture.id);else failures.push(`${file.name}: 저장하지 못했어요`);
+          } catch(error) {failures.push(`${file.name}: ${error.message||"사진을 읽지 못했어요"}`);}
+        }
+        if(savedIds.length) {activeCaptureId=savedIds[0];selected=data.captures.find(c=>c.id===activeCaptureId).date;render();}
+        else activeCaptureId=data.captures.some(c=>c.id===previousCaptureId)?previousCaptureId:null;
+        if(store)for(const [index,id] of savedIds.entries()) {
+          photoBatchStatus=`사진 ${savedIds.length}장 보관 완료 · ${index+1}/${savedIds.length}장 살펴보는 중…`;render();
+          await runConcierge(id);
+        }
+      } finally {
+        photoBatchWorking=false;
+        photoBatchStatus=`${files.length}장 중 ${savedIds.length}장 보관 완료${failures.length?`. ${failures.join(' · ')}. 실패한 사진만 다시 선택해 주세요.`:""}`;
+        render();
+      }
     };
     const form=$("#conciergeForm");
-    if(form) form.onsubmit=async e=>{e.preventDefault();const message=$("#conciergeMessage").value.trim();if(message)await runConcierge(activeCaptureId,message);};
+    if(form) form.onsubmit=async e=>{e.preventDefault();if(photoBatchWorking)return;const message=$("#conciergeMessage").value.trim();if(message)await runConcierge(activeCaptureId,message);};
   }
   async function openConversation(id,kind) {
     let capture=data.captures.find(c=>c.id===id);
@@ -609,7 +626,7 @@ import {
     const capture=currentCapture();if(!capture)return;
     manualCapture(data,capture,kind);
     appendChat(capture,"system",`${({food:'음식',exercise:'운동',weight:'몸무게'})[kind]} 사진으로 기록했어요. 수치나 메모는 비워 두어도 괜찮아요.`);
-    if(await save())render();
+    if(await save()){selected=capture.date;render();}
   }
   function editConversationRecord() {
     const c=currentCapture(),r=c&&linkedRecord(data,c);if(!r)return;

@@ -1205,7 +1205,7 @@ body.brand-home { background:#f7f8f4; }
 .brand-home #settingsButton svg { width:19px;height:19px; }
 .brand-home #storageStatus { position:absolute;top:34px;right:max(90px,calc((100vw - 1120px)/2 + 90px));max-width:calc(100vw - 120px);padding:0;min-height:22px;font-size:11px;line-height:1.6;color:#657567;justify-content:flex-end;z-index:2; }
 .brand-home #main { padding:0; }
-.brand-hero { min-height:100svh;padding:100px 24px 144px; }
+.brand-hero { min-height:100svh;padding:164px 24px 144px; }
 .hero-identity { display:flex;flex-direction:column;align-items:center; }
 .brand-hero .hero-wordmark { position:relative;font-size:clamp(82px,12vw,128px);line-height:1;font-weight:780;letter-spacing:-.075em;color:#1b2925;margin:0;padding-right:9px; }
 .hero-wordmark .brand-slash { color:#76a492;font-weight:560; }
@@ -1226,7 +1226,7 @@ body.brand-home { background:#f7f8f4; }
 @media (max-width:599px) {
   .brand-home .topbar { height:78px;padding:20px; }
   .brand-home #storageStatus { top:28px;right:72px;max-width:calc(100vw - 98px);font-size:10px; }
-  .brand-hero { padding-top:84px;padding-bottom:132px; }
+  .brand-hero { padding-top:148px;padding-bottom:132px; }
   .brand-hero p.hero-copy { font-size:25px;margin-top:30px; }
 }
 @media (max-height:650px) {

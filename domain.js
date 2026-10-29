@@ -1,3 +1,11 @@
+export function captureDate(tags) {
+  const text=tags?.DateTimeOriginal;
+  if(typeof text !== 'string')return null;
+  const match=/^(\d{4}):(\d{2}):(\d{2}) (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d/.exec(text);
+  if(!match)return null;
+  const [,year,month,day]=match, date=new Date(`${year}-${month}-${day}T12:00:00Z`);
+  return !Number.isNaN(date.valueOf()) && date.getUTCFullYear()===Number(year) && date.getUTCMonth()+1===Number(month) && date.getUTCDate()===Number(day) ? `${year}-${month}-${day}` : null;
+}
 export function captureTime(tags) {
   // Read the original wall-clock EXIF string; do not convert timezone or use upload time.
   const text = tags?.DateTimeOriginal;

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   captureTime,
+  captureDate,
   calorieSummary,
   recordedAverage,
   validateJournal,
@@ -19,6 +20,11 @@ test("EXIF original time is kept as wall clock, absent tags stay empty", () => {
     { DateTimeOriginal: new Date() },
   ])
     assert.equal(captureTime(tags), "");
+});
+test("original calendar date is preserved without timezone shifts; missing and impossible dates remain unknown",()=>{
+  assert.equal(captureDate({DateTimeOriginal:'2026:10:27 00:09:10'}),'2026-10-27');
+  assert.equal(captureDate({DateTimeOriginal:'2024:02:29 23:59:59'}),'2024-02-29');
+  for(const value of [null,undefined,'2026:02:29 08:00:00','2026:04:31 08:00:00','2026:13:01 08:00:00','2026:10:27 28:00:00'])assert.equal(captureDate({DateTimeOriginal:value}),null);
 });
 test("unknown calories are excluded from average rather than treated as zero", () => {
   assert.deepEqual(calorieSummary([{ kcal: null }]), {

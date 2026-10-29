@@ -1186,3 +1186,11 @@ button:disabled {
 .manual-options .choice-row { margin-top:12px; }
 .nutrients-detail { margin-top:22px; }
 .nutrients-detail > summary { font-size:13px;margin-bottom:17px;color:#63795b;cursor:pointer; }
+.batch-status { font-size:12px;line-height:1.7;color:#627663;overflow-wrap:anywhere; }
+.photo-batch { display:flex;gap:8px;margin:12px 0; }
+.photo-batch button { min-width:0;flex:1;padding:5px;border:1px solid #e0e6dc;border-radius:12px;background:transparent;color:#768570; }
+.photo-batch button.selected { border-color:#5a835f;background:#edf3e9; }
+.photo-batch img { display:block;width:100%;height:64px;object-fit:cover;border-radius:8px; }
+.photo-batch span { display:block;font-size:10px;margin:6px 0 2px; }
+.photo-batch small { display:block;font-size:9px;margin-top:3px; }
+.capture-stamp { font-size:11px;color:#7b897c;margin:5px 0 12px; }

@@ -1203,7 +1203,7 @@ body.brand-home { background:#f7f8f4; }
 .brand-home .topbar > .brand { display:none; }
 .brand-home #settingsButton { border:1px solid #e4e9e1;background:#ffffff90;border-radius:50%;color:#617567; }
 .brand-home #settingsButton svg { width:19px;height:19px; }
-.brand-home #storageStatus { position:absolute;top:34px;right:max(90px,calc((100vw - 1120px)/2 + 90px));max-width:calc(100vw - 120px);padding:0;min-height:22px;font-size:11px;line-height:1.6;color:#7b897e;justify-content:flex-end;z-index:2; }
+.brand-home #storageStatus { position:absolute;top:34px;right:max(90px,calc((100vw - 1120px)/2 + 90px));max-width:calc(100vw - 120px);padding:0;min-height:22px;font-size:11px;line-height:1.6;color:#657567;justify-content:flex-end;z-index:2; }
 .brand-home #main { padding:0; }
 .brand-hero { min-height:100svh;padding:100px 24px 144px; }
 .hero-identity { display:flex;flex-direction:column;align-items:center; }
@@ -1215,12 +1215,12 @@ body.brand-home { background:#f7f8f4; }
 .brand-hero .photo-orb { width:auto;min-width:244px;height:62px;padding:0 27px;margin:32px 0 0;flex-direction:row;gap:12px;border:1px solid #244331;border-radius:999px;background:#244331;color:#fff;box-shadow:0 8px 20px #24433112;font-size:15px;font-weight:600;letter-spacing:-.3px;transition:background .16s,transform .16s,box-shadow .16s; }
 .brand-hero .photo-orb svg { width:23px;height:23px; }
 .brand-hero .photo-orb:hover { background:#315640;transform:translateY(-2px);box-shadow:0 10px 25px #24433122; }
-.brand-hero .photo-orb:focus-within { outline:2px solid #76a492;outline-offset:5px; }
-.brand-hero .hero-helper { margin-top:16px;font-size:11px;line-height:1.6;color:#8b9a8d; }
+.brand-hero .photo-orb:focus-within { outline:2px solid #5d8a73;outline-offset:5px; }
+.brand-hero .hero-helper { margin-top:16px;font-size:11px;line-height:1.6;color:#657567; }
 .brand-hero .batch-status { max-width:400px; }
 .nav-icon svg { display:block;width:23px;height:23px; }
 .brand-home .bottom-nav { width:min(344px,calc(100% - 40px));height:58px;bottom:calc(24px + env(safe-area-inset-bottom));padding:5px;gap:4px;border:1px solid #e2e8df;border-radius:999px;background:#ffffffeb;box-shadow:0 6px 26px #263f2d08; }
-.brand-home .bottom-link { flex:1;min-width:0;height:46px;flex-direction:row;justify-content:center;gap:8px;font-size:12px;border-radius:999px;color:#8a978c; }
+.brand-home .bottom-link { flex:1;min-width:0;height:46px;flex-direction:row;justify-content:center;gap:8px;font-size:12px;border-radius:999px;color:#657567; }
 .brand-home .bottom-link.active { background:#edf2e9;color:#365440;font-weight:650; }
 .brand-home .nav-icon svg { width:19px;height:19px; }
 @media (max-width:599px) {

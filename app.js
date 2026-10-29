@@ -517,6 +517,9 @@ import {
   }
   function render() {
     const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
+    const landing=surface==='home'&&!capture&&!accountPending;
+    document.body.classList.toggle('brand-home',landing);
+    $('#app').classList.toggle('brand-home',landing);
     $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
       ? renderConcierge({capture,working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : view === "day" ? renderDay() : view === "week" ? renderWeek() : renderMonth();
     $("#modeSwitch").hidden = surface !== "mine";
@@ -1544,6 +1547,7 @@ import {
     }
     if (button.id === "homeBtn") {
       surface = "home";
+      activeCaptureId = null;
       view = "day";
       selected = TODAY;
       render();

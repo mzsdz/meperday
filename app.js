@@ -470,7 +470,7 @@ import {
                   .map((r) => r.name)
                   .join(" · "),
               )
-            : "기록 없음"
+            : hasRecordsOn(d) ? "사진·활동 기록" : "기록 없음"
         }</small></span><strong>${calorieSummary(rr).value === null ? "열량 미확인" : fmtInt(total(rr)) + " kcal" + (calorieSummary(rr).partial ? " + 미확인" : "")}</strong></button>`;
       })
       .join(
@@ -500,11 +500,11 @@ import {
     return `<div class="date-nav"><button class="ghost-date" id="goToday">이번 달</button><strong class="date-title">${year}년 ${month + 1}월</strong><div class="date-arrows"><button data-month-shift="-1">‹</button><button data-month-shift="1">›</button></div></div><div class="card"><div class="month-grid">${DAY.map((l) => `<span class="month-head">${l}</span>`).join("")}${prev}${days
       .map((x) => {
         let n = total(recordsOn(x));
-        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:${n > data.goals.kcal * 1.2 ? "#d98b70" : "#75ab85"}"></span>` : '<span style="height:5px"></span>'}</button>`;
+        return `<button class="day-cell ${x === selected ? "selected" : ""}" data-past="${x}"><span class="day-num">${dateObj(x).getDate()}</span>${hasRecordsOn(x) ? `<span class="dot" style="background:#75ab85"></span>` : '<span style="height:5px"></span>'}</button>`;
       })
       .join(
         "",
-      )}</div><div class="chart-note">초록 점은 식사·운동·몸무게 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => hasRecordsOn(x)).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
+      )}</div><div class="chart-note">초록 점은 사진·식사·운동·몸무게 기록이 있는 날 · 점을 누르면 일간으로 이동</div></div><div class="summary-cards"><div class="summary-cell"><span>기록일 평균 칼로리</span><strong>${valid.length ? fmtInt(avg) : "—"} <span>kcal</span></strong></div><div class="summary-cell"><span>기록한 날</span><strong>${days.filter((x) => hasRecordsOn(x)).length} <span>일</span></strong></div></div><div class="section-header"><h2>한 달의 기록 흐름</h2><span class="subtle">확인된 열량만 표시</span></div><div class="card"><div class="week-chart" style="gap:2px;height:150px">${days
       .map((x) => {
         let n = total(recordsOn(x));
         return `<div class="bar-col" style="height:140px;justify-content:end;gap:0"><div class="bar-wrap" style="height:110px"><div class="bar ${x === selected ? "on" : ""}" style="width:85%;height:${n ? Math.round((n / max) * 100) : 2}%"></div></div>${dateObj(x).getDate() % 5 === 0 ? `<span class="label" style="font-size:8px">${dateObj(x).getDate()}</span>` : '<span class="label" style="font-size:8px;opacity:0">-</span>'}</div>`;

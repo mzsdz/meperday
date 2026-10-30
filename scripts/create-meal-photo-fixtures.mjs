@@ -1,0 +1,18 @@
+// Deterministic meal diagrams for vision regression testing, not calorie ground truth.
+import {webkit} from '@playwright/test';
+import {readFile,writeFile} from 'node:fs/promises';
+const plate=(remaining)=>{
+ let food='';
+ for(let i=0;i<80;i++){if(remaining&&i%2)continue;const x=350+(i%10)*9+(Math.floor(i/10)%2)*4,y=265+Math.floor(i/10)*12;food+=`<ellipse cx="${x}" cy="${y}" rx="8" ry="4" fill="#fff4d1" stroke="#d6c59c" stroke-width=".7" transform="rotate(${i%3*20-20} ${x} ${y})"/>`;}
+ for(let i=0;i<6;i++){if(remaining&&i%2)continue;const x=470+(i%2)*32,y=270+Math.floor(i/2)*45;food+=`<path d="M${x-17} ${y-11}q20 -18 35 3l-4 27q-22 15 -38 -4z" fill="#a95e2c" stroke="#77411e" stroke-width="3"/><path d="M${x-10} ${y-3}l20 10" stroke="#e1ae67" stroke-width="5"/>`;}
+ for(let i=0;i<10;i++){if(remaining&&i%2)continue;const x=275+(i%3)*30,y=295+Math.floor(i/3)*32;food+=`<circle cx="${x}" cy="${y}" r="17" fill="#477c35" stroke="#28542b" stroke-width="2"/><circle cx="${x-4}" cy="${y-5}" r="7" fill="#72a14b"/>`;}
+ for(let i=0;i<8;i++){if(remaining&&i%2)continue;food+=`<ellipse cx="${335+i%4*34}" cy="${410+Math.floor(i/4)*27}" rx="17" ry="10" fill="#e88b30" stroke="#bc692a" stroke-width="2"/>`;}
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="640"><defs><pattern id="wood" width="90" height="120" patternUnits="userSpaceOnUse"><rect width="90" height="120" fill="#b18a62"/><path d="M5 0v120m20-120q20 60 0 120m40-120v120" fill="none" stroke="#9d7855" stroke-width="2"/></pattern></defs><rect width="720" height="640" fill="url(#wood)"/><rect x="40" y="80" width="160" height="440" rx="12" fill="#c7c9bc"/><path d="M100 250v210m-20-215v-55m20 55v-55m20 55v-55m-40 55q20 30 40 0" fill="none" stroke="#888d8e" stroke-width="7"/><ellipse cx="400" cy="353" rx="245" ry="225" fill="#715638" opacity=".35"/><ellipse cx="390" cy="340" rx="245" ry="225" fill="#eee9dd" stroke="#798a79" stroke-width="8"/><ellipse cx="390" cy="340" rx="210" ry="190" fill="#fffdf5" stroke="#ddd8c9" stroke-width="2"/>${food}</svg>`;
+};
+function withCaptureTime(png,time) {
+ const tiff=Buffer.alloc(64);tiff.write('II');tiff.writeUInt16LE(42,2);tiff.writeUInt32LE(8,4);tiff.writeUInt16LE(1,8);tiff.writeUInt16LE(0x8769,10);tiff.writeUInt16LE(4,12);tiff.writeUInt32LE(1,14);tiff.writeUInt32LE(26,18);tiff.writeUInt16LE(1,26);tiff.writeUInt16LE(0x9003,28);tiff.writeUInt16LE(2,30);tiff.writeUInt32LE(20,32);tiff.writeUInt32LE(44,36);tiff.write(`2026:10:30 ${time}`,44,'ascii');
+ const type=Buffer.from('eXIf'),chunk=Buffer.alloc(tiff.length+12);chunk.writeUInt32BE(tiff.length);type.copy(chunk,4);tiff.copy(chunk,8);
+ let crc=0xffffffff;for(const byte of Buffer.concat([type,tiff])){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}chunk.writeUInt32BE((crc^0xffffffff)>>>0,chunk.length-4);
+ return Buffer.concat([png.subarray(0,33),chunk,png.subarray(33)]);
+}
+const browser=await webkit.launch();try{const page=await browser.newPage({viewport:{width:720,height:640}});for(const [name,remaining] of [['meal-before',false],['meal-after',true]]){await page.setContent(plate(remaining));const file=`e2e/fixtures/${name}.png`;await page.locator('svg').screenshot({path:file});await writeFile(file,withCaptureTime(await readFile(file),remaining?'12:30:00':'12:00:00'));}}finally{await browser.close()}

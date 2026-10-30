@@ -127,3 +127,11 @@ test("conversation and linked record retain their own photo paths when IDs match
   const restored = await store.load();
   assert.match(restored.captures[0].photo, /^https:/);
 });
+
+test("a paired leftover keeps its own private image and one meal after storage reload",async()=>{
+  const {applyConcierge,linkedRecord}=await import('../concierge-domain.js');
+  const f=fakeClient(),store=createJournalStore(f.client,'user-a'),value=journal();value.records=[];
+  value.captures=[{id:'before',date:'2026-10-30',time:'12:00',batchId:'batch',photo:'data:image/jpeg;base64,aGVsbG8=',messages:[]},{id:'after',date:'2026-10-30',time:'12:30',batchId:'batch',photo:'data:image/jpeg;base64,/9j/AA==',messages:[]}];
+  applyConcierge(value,value.captures[0],{kind:'food',reply:'실제 먹은 양만 반영',assumptions:[],shouldUpdate:true,food:{name:'식사',kcal:300,nutrients:{carb:40},notes:''},exercise:null,weightKg:null,mealPhotos:{beforeId:'before',afterId:'after'}});
+  await store.save(value);const restored=await store.load();assert.equal(restored.records.length,1);assert.notEqual(restored.captures[0].photoPath,restored.captures[1].photoPath);assert.equal(linkedRecord(restored,restored.captures[1]).kcal,300);assert.equal(restored.records[0].photoPath,restored.captures[0].photoPath);
+});

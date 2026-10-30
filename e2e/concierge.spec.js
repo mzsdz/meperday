@@ -78,3 +78,27 @@ test('my page keeps an optional personal energy reference, chronological food/ac
   await page.reload();await mine(page);await expect(page.locator('.energy-comparison')).toContainText('2,136');
   await page.locator('#profileButton').click();await page.locator('#energyMode').selectOption('none');await page.locator('#profileForm button[type="submit"]').click();await expect(page.locator('.energy-comparison')).toHaveCount(0);
 });
+
+// Guest messages exercise the real local save/render path without fabricating AI replies.
+test('chat keeps a compact photo and reachable composer as the viewport shrinks, then restores the conversation',async({page})=>{
+  await page.setViewportSize({width:393,height:736});await page.goto('/');
+  await page.locator('#conciergePhoto').setInputFiles(photo);
+  for(const text of ['밥은 절반만 먹었어','조금 적게 나온 것 같은데','어떤 양으로 본 거야?']) {
+    await page.locator('#conciergeMessage').fill(text);await page.locator('#conciergeForm button').click();
+    await expect(page.locator('#conciergeMessage')).toBeEnabled();
+  }
+  await expect(page.locator('.from-user')).toHaveCount(3);
+  for(const height of [736,400,568]) {
+    await page.setViewportSize({width:393,height});
+    await expect.poll(()=>page.evaluate(()=>{
+      const input=document.querySelector('#conciergeMessage').getBoundingClientRect();
+      const scroll=document.querySelector('.conversation-scroll');
+      const photo=document.querySelector('.photo-message img').getBoundingClientRect();
+      return input.top>=0&&input.bottom<=innerHeight&&photo.height<=180&&scroll.clientHeight>40&&document.documentElement.scrollWidth<=innerWidth;
+    })).toBe(true);
+  }
+  await page.locator('#conciergeMessage').fill('아직 보내지 않은 설명');
+  await page.reload();await expect(page.locator('.from-user')).toHaveCount(3);
+  await expect(page.locator('.conversation-messages')).toContainText('어떤 양으로 본 거야?');
+  await page.locator('.conversation-actions [data-open-journal]').click();await expect(page.locator('.timeline-row')).toHaveCount(1);
+});

@@ -73,7 +73,7 @@ test("food: EXIF, orientation, photo replacement, all optional fields, cancel/de
     place: "선택한 가게",
     note: "메모",
   });
-  await page.locator('[data-day-shift="-1"]').click();
+  // Returning from a conversation now opens that record's date directly.
   await editRecord(page,"food");
   page.once("dialog", (d) => d.dismiss());
   await page.locator("#deleteFood").click();

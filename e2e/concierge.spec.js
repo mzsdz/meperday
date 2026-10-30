@@ -11,7 +11,7 @@ for (const width of [320,393,430]) test(`${width}px one photo home keeps a compl
   if(width===393) await page.screenshot({path:testInfo.outputPath('home.png')});
   await page.locator('#conciergePhoto').setInputFiles(photo);await expect(page.locator('.photo-message img')).toBeVisible();
   await page.reload();await expect(page.locator('.photo-message img')).toBeVisible();
-  await page.locator('#conciergeMessage').fill('밥 두 공기였어');await page.locator('#conciergeForm button').click();
+  await page.locator('#conciergeMessage').fill('밥 두 공기였어');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');
   await page.locator('[data-classify="food"]').click();await mine(page);
   await expect(page.locator('.timeline-row')).toContainText('08:09');await expect(page.locator('.timeline-row')).toContainText('열량 미확인');
@@ -64,7 +64,7 @@ test('when every new save fails the previous photo remains usable for conversati
   await page.evaluate(()=>{window.restoreStorage=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new DOMException('test','QuotaExceededError');};});
   await page.locator('#conciergePhoto').setInputFiles({name:'new.png',mimeType:'image/png',buffer:png});await expect(page.locator('.batch-status')).toContainText('1장 중 0장 보관 완료');
   expect((await readJournal(page)).captures.map(c=>c.id)).toEqual([old]);await page.evaluate(()=>{Storage.prototype.setItem=window.restoreStorage;});
-  await page.locator('#conciergeMessage').fill('사진 속 음식 이름을 알려줘');await page.locator('#conciergeForm button').click();await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');
+  await page.locator('#conciergeMessage').fill('사진 속 음식 이름을 알려줘');await page.locator('#conciergeForm button[type="submit"]').click();await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');
 });
 test('my page keeps an optional personal energy reference, chronological food/activity, and no exercise double counting',async({page},testInfo)=>{
   await page.goto('/');await mine(page);await page.locator('#profileButton').click();
@@ -84,7 +84,7 @@ test('chat keeps a compact photo and reachable composer as the viewport shrinks,
   await page.setViewportSize({width:393,height:736});await page.goto('/');
   await page.locator('#conciergePhoto').setInputFiles(photo);
   for(const text of ['밥은 절반만 먹었어','조금 적게 나온 것 같은데','어떤 양으로 본 거야?']) {
-    await page.locator('#conciergeMessage').fill(text);await page.locator('#conciergeForm button').click();
+    await page.locator('#conciergeMessage').fill(text);await page.locator('#conciergeForm button[type="submit"]').click();
     await expect(page.locator('#conciergeMessage')).toBeEnabled();
   }
   await expect(page.locator('.from-user')).toHaveCount(3);

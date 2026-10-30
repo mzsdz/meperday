@@ -55,7 +55,7 @@ try {
  };
  const first=await uploadPair(),kcal=first.records[0].kcal;
  await page.screenshot({path:'test-results/live-leftovers-pair.png'});
- await page.locator('#conciergeMessage').fill('남긴 양을 이미 빼고 계산한 거지? 이유만 설명해 줘. 양은 바꾸지 마.');await page.locator('#conciergeForm button').click();
+ await page.locator('#conciergeMessage').fill('남긴 양을 이미 빼고 계산한 거지? 이유만 설명해 줘. 양은 바꾸지 마.');await page.locator('#conciergeForm button[type="submit"]').click();
  await expect(page.locator('.from-assistant')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();assert.equal((await journal()).payload.records[0].kcal,kcal);
  await page.reload();await expect(page.locator('.meal-photo-pair img')).toHaveCount(2,{timeout:20000});
  await page.locator('.photo-batch button').nth(1).click();await page.locator('#editConversationRecord').click();await page.locator('#foodKcal').fill('321');await page.locator('#foodForm button[type="submit"]').click();await expect(page.locator('#overlay')).toHaveClass(/hidden/);

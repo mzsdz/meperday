@@ -54,7 +54,7 @@ try {
   await page.locator('.photo-batch button').first().click();
   const before=await journal(),beforeKcal=before.records.find(r=>r.id===before.captures[0].id).kcal;
   const replies=await page.locator('.from-assistant').count();
-  await page.locator('#conciergeMessage').fill('사진에 없는 치킨도 먹었어. 사진은 없는데 이 기록에 치킨 한 마리 1800kcal도 추가해 줘.');await page.locator('#conciergeForm button').click();
+  await page.locator('#conciergeMessage').fill('사진에 없는 치킨도 먹었어. 사진은 없는데 이 기록에 치킨 한 마리 1800kcal도 추가해 줘.');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.from-assistant')).toHaveCount(replies+1,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   const after=await journal();assert.equal(after.records.find(r=>r.id===before.captures[0].id).kcal,beforeKcal);assert.equal(after.records.length,before.records.length);await expect(page.locator('.from-assistant').last()).toContainText('사진');
   await page.locator('#settingsButton').click();await page.locator('#signOut').click();await expect(page.locator('#storageStatus')).toContainText('이 기기에 저장',{timeout:20000});

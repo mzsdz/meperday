@@ -1443,3 +1443,11 @@ body.conversation-view { overflow:hidden; }
 .meal-pair-note { margin:12px 0 0;font-size:11px;line-height:1.7;color:#5d765f;text-align:right; }
 
 .conversation-view .portion-calculation { flex-basis:100%;font-variant-numeric:tabular-nums; }
+
+.chat-mic { flex-shrink:0;display:flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:#eef3e9;color:#46664e; }
+.chat-mic svg { flex-shrink:0; }
+.chat-mic.listening { background:#a64035;color:white;box-shadow:0 0 0 4px #a6403512; }
+.chat-mic:focus-visible { outline:2px solid #769b79;outline-offset:3px; }
+.conversation-view .chat-send { flex-shrink:0; }
+.voice-status { margin:8px 4px 0;color:#5d765f;font-size:11px;line-height:1.7;text-align:center; }
+@media(max-width:359px) { .conversation-view .chat-composer { gap:6px;padding:8px; }.chat-mic,.conversation-view .chat-send { width:36px;height:36px; } }

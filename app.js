@@ -262,7 +262,7 @@ import {
   data.weights ??= [];
   data.captures ??= [];
   data.profile ??= {};
-  let surface = "home", activeCaptureId = data.captures.at(-1)?.id || null, conciergeWorking = false;
+  let surface = "home", activeCaptureId = data.captures.at(-1)?.id || null, conciergeWorking = false, streamingReply = null;
   let photoBatchWorking=false, photoBatchStatus="";
   let selected = TODAY,
     view = "day",
@@ -526,7 +526,7 @@ import {
     document.body.classList.toggle('journal-view',surface==='mine');
     document.body.classList.toggle('conversation-view',surface==='home'&&!!capture);
     $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
-      ? renderConcierge({capture,working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
+      ? renderConcierge({capture,streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
     $("#modeSwitch").hidden = surface !== "mine";
     document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
     $("#homeBtn").classList.toggle("active",surface==="home");
@@ -576,9 +576,25 @@ import {
     if(!capture.analysis && existing) capture.analysis=recordContext(existing,capture.recordKind);
     if(message) { appendChat(capture,"user",message); if(!(await save())) {render();return;} }
     const baseline=JSON.stringify(linkedRecord(data,capture));
-    conciergeWorking=true; render();
+    conciergeWorking=true;streamingReply={id,text:""};render();
     try {
-      const result=await askConcierge(capture,message);
+      const result=await askConcierge(capture,message,text=>{
+        streamingReply={id,text};
+        if(surface!=="home" || currentCapture()?.id!==id)return;
+        const messages=$('.conversation-messages'), scroller=$('.conversation-scroll');
+        if(!messages||!scroller)return;
+        const follow=scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<80;
+        let bubble=messages.querySelector('.chat-streaming');
+        if(!bubble) {
+          messages.querySelector('.chat-thinking')?.remove();
+          bubble=document.createElement('div');bubble.className='chat-message chat-streaming';bubble.setAttribute('aria-live','off');
+          bubble.innerHTML='<span>me/day</span><p></p>';
+          messages.append(bubble);
+        }
+        bubble.querySelector('p').textContent=text;
+        if(follow)scroller.scrollTop=scroller.scrollHeight;
+      });
+      streamingReply=null;
       await idleForReply();
       capture=data.captures.find(c=>c.id===id); if(!capture)return;
       if(JSON.stringify(linkedRecord(data,capture))!==baseline) {
@@ -593,7 +609,7 @@ import {
       await idleForReply().catch(()=>{});
       capture=data.captures.find(c=>c.id===id);
       if(capture && !busy) {appendChat(capture,"system",error.message||"답변을 가져오지 못했어요. 사진은 그대로 남아 있어요.");await save();}
-    } finally { conciergeWorking=false; render(); }
+    } finally { conciergeWorking=false;streamingReply=null;render(); }
   }
   function bindConciergeHome() {
     const input=$("#conciergePhoto");

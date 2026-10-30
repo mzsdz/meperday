@@ -46,10 +46,26 @@ try {
   await page.goto(link.data.properties.action_link);
   await expect(page.locator('#storageStatus')).toContainText('서버 저장',{timeout:20000});
   const journal=async()=>{const r=await owner.from('meday_journals').select('payload').eq('user_id',id).single();if(r.error)throw r.error;return r.data.payload;};
+  await page.evaluate(()=>{
+    window.__streamQA={frames:[],firstRecords:null};
+    new MutationObserver(()=>{
+      const text=document.querySelector('.chat-streaming p')?.textContent;
+      if(text && window.__streamQA.frames.at(-1)?.text!==text) {
+        window.__streamQA.frames.push({text,time:performance.now()});
+        if(window.__streamQA.firstRecords===null)window.__streamQA.firstRecords=document.querySelectorAll('.conversation-fact').length;
+      }
+      if(document.querySelector('.from-assistant')&&!window.__streamQA.finished)window.__streamQA.finished=performance.now();
+    }).observe(document.querySelector('#main'),{childList:true,subtree:true,characterData:true});
+  });
   const photo=fileURLToPath(new URL('../../food-ai.jpg',import.meta.url));
   await page.locator('#conciergePhoto').setInputFiles(photo);
   await expect(page.locator('.from-assistant')).toHaveCount(1,{timeout:60000});
   await expect(page.locator('#conciergeMessage')).toBeEnabled();
+  const streamed=await page.evaluate(()=>window.__streamQA);
+  assert.ok(streamed.frames.length>1,'Expected multiple visible reply chunks before completion');
+  assert.equal(streamed.firstRecords,0,'Partial text must not display unconfirmed calorie values');
+  assert.ok(streamed.finished>streamed.frames[0].time);
+  console.log('PASS: real streaming reply before final result',JSON.stringify({frames:streamed.frames.length,firstChunkBeforeCompletionMs:Math.round(streamed.finished-streamed.frames[0].time)}));
   const initial=await journal();assert.equal(initial.records.length,1);assert.ok(initial.records[0].kcal>0);assert.equal(initial.records[0].time,'');
   await page.screenshot({path:'test-results/live-chat-first-reply.png'});
   const recordId=initial.records[0].id, initialKcal=initial.records[0].kcal;

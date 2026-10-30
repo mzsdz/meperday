@@ -1431,3 +1431,6 @@ body.conversation-view { overflow:hidden; }
   .conversation-view .conversation-top { padding:6px 0; }
   .conversation-view .chat-note { display:none; }
 }
+
+.conversation-view .chat-streaming { padding:0 2px; }
+.conversation-view .chat-streaming > span { display:block;margin-bottom:9px;font-size:12px;font-weight:750;letter-spacing:-.7px;color:#31563c; }

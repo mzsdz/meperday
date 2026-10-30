@@ -516,6 +516,8 @@ import {
       )}</div><div class="chart-note">기록이 없는 날의 칼로리는 알 수 없어요.</div></div>`;
   }
   function render() {
+    const oldThread=$('.concierge-thread'), oldScroll=$('.conversation-scroll'), oldInput=$('#conciergeMessage');
+    const previousChat=oldThread ? {id:oldThread.dataset.captureId,top:oldScroll?.scrollTop||0,nearEnd:!oldScroll||oldScroll.scrollHeight-oldScroll.scrollTop-oldScroll.clientHeight<80,draft:oldInput?.value||"",focused:document.activeElement===oldInput,start:oldInput?.selectionStart,end:oldInput?.selectionEnd} : null;
     const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
     const landing=surface==='home'&&!capture&&!accountPending;
     document.body.classList.toggle('brand-home',landing);
@@ -530,7 +532,16 @@ import {
     $("#homeBtn").classList.toggle("active",surface==="home");
     $("#myPageBtn").classList.toggle("active",surface==="mine");
     document.querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton").forEach(b=>b.disabled=accountPending);
-    if(surface === "home" && !accountPending) bindConciergeHome();
+    if(surface === "home" && !accountPending) {
+      bindConciergeHome();
+      const scroller=$('.conversation-scroll'), input=$('#conciergeMessage');
+      if(scroller) {
+        scroller.scrollTop=previousChat?.id===capture?.id&&!previousChat.nearEnd ? previousChat.top : scroller.scrollHeight;
+        if(previousChat?.id===capture?.id && input && previousChat.draft) input.value=previousChat.draft;
+        if(input) { input.style.height='auto';input.style.height=`${Math.min(108,Math.max(38,input.scrollHeight))}px`; }
+        if(previousChat?.focused && input && !input.disabled) {input.focus({preventScroll:true});input.setSelectionRange(previousChat.start,previousChat.end);}
+      }
+    }
   }
   function syncCaptures() {
     data.captures = data.captures.filter(c => !c.recordKind || linkedRecord(data,c));
@@ -573,9 +584,9 @@ import {
       if(JSON.stringify(linkedRecord(data,capture))!==baseline) {
         appendChat(capture,"system","답변을 준비하는 동안 기록이 바뀌어서, 직접 수정한 내용을 그대로 남겼어요.");
       } else {
-        const updated=applyConcierge(data,capture,result);
+        applyConcierge(data,capture,result);
         appendChat(capture,"assistant",result.reply);
-        if(updated) appendChat(capture,"system","기록에 반영했어요. 더 설명하지 않아도 완료예요.");
+
       }
       await save();
     } catch(error) {
@@ -614,8 +625,10 @@ import {
         render();
       }
     };
+    const composerInput=$("#conciergeMessage");
+    if(composerInput) composerInput.oninput=()=>{composerInput.style.height='auto';composerInput.style.height=`${Math.min(108,Math.max(38,composerInput.scrollHeight))}px`;};
     const form=$("#conciergeForm");
-    if(form) form.onsubmit=async e=>{e.preventDefault();if(photoBatchWorking)return;const message=$("#conciergeMessage").value.trim();if(message)await runConcierge(activeCaptureId,message);};
+    if(form) form.onsubmit=async e=>{e.preventDefault();if(photoBatchWorking)return;const message=$("#conciergeMessage").value.trim();if(message){$("#conciergeMessage").value="";await runConcierge(activeCaptureId,message);}};
   }
   async function openConversation(id,kind) {
     let capture=data.captures.find(c=>c.id===id);
@@ -1556,7 +1569,7 @@ import {
       render();
       return;
     }
-    if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { surface = "mine"; closeSheet(); render(); return; }
+    if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { if(surface==="home"&&currentCapture())selected=currentCapture().date; surface = "mine"; closeSheet(); render(); return; }
     if (button.id === "profileButton" || button.hasAttribute("data-profile")) { showProfile(); return; }
     if (button.id === "newPhotoFromTimeline") { surface="home"; activeCaptureId=null; render(); $("#conciergePhoto").click(); return; }
     if (button.dataset.conversation) { void openConversation(button.dataset.conversation,button.dataset.recordKind); return; }

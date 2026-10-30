@@ -103,9 +103,7 @@ test('chat keeps a compact photo and reachable composer as the viewport shrinks,
   await page.locator('.conversation-actions [data-open-journal]').click();await expect(page.locator('.timeline-row')).toHaveCount(1);
 });
 
-// Explicit saved-data fixture: checks paired record UI independently of a model's estimates.
-for(const width of [320,393,430])test(`${width}px paired before/leftover evidence survives editing, reload and whole-meal deletion`,async({page})=>{
-  await page.setViewportSize({width,height:736});await page.goto('/');
+async function seedPairedGuest(page) {
   await page.locator('#conciergePhoto').setInputFiles([datedPhoto('2026-10-27'),{name:'after.png',mimeType:'image/png',buffer:png}]);
   await expect(page.locator('.batch-status')).toContainText('2장 중 2장 보관 완료');
   await page.evaluate(()=>{
@@ -116,6 +114,12 @@ for(const width of [320,393,430])test(`${width}px paired before/leftover evidenc
     after.linkedRecordId=before.id;j.records=[{...before,name:food.name,kcal:300,meal:'entry',nutrients:food.nutrients}];
     localStorage.setItem('meday-mvp-v02',JSON.stringify(j));
   });await page.reload();
+}
+
+// Explicit saved-data fixture: checks paired record UI independently of a model's estimates.
+for(const width of [320,393,430])test(`${width}px paired before/leftover evidence survives editing, reload and whole-meal deletion`,async({page})=>{
+  await page.setViewportSize({width,height:736});await page.goto('/');
+  await seedPairedGuest(page);
   await expect(page.locator('.meal-photo-pair img')).toHaveCount(2);await expect(page.locator('.conversation-fact')).toContainText('300');
   const afterSrc=await page.locator('.meal-photo-pair img').nth(1).getAttribute('src');
   await page.locator('.photo-batch button').nth(1).click();await page.locator('#editConversationRecord').click();
@@ -125,4 +129,11 @@ for(const width of [320,393,430])test(`${width}px paired before/leftover evidenc
   await mine(page);await expect(page.locator('.timeline-row')).toHaveCount(1);await expect(page.locator('.cal-big')).toContainText('250');
   await page.locator('.timeline-row').click();page.once('dialog',d=>d.accept());await page.locator('#deleteConversation').click();
   await page.reload();const saved=await readJournal(page);expect(saved.records).toHaveLength(0);expect(saved.captures).toHaveLength(0);
+});
+
+test('a user can split an incorrect pair without losing either photo or keeping the combined calorie estimate',async({page})=>{
+  await page.goto('/');await seedPairedGuest(page);await page.locator('#separateMeals').click();
+  await expect(page.locator('.meal-photo-pair')).toHaveCount(0);
+  const j=await readJournal(page);expect(j.records).toHaveLength(2);expect(j.records.every(r=>r.kcal===null)).toBe(true);expect(j.captures).toHaveLength(2);expect(j.captures.every(c=>c.pairingDisabled&&!c.mealPair&&!c.linkedRecordId)).toBe(true);
+  await page.reload();await expect(page.locator('.photo-batch button')).toHaveCount(2);await expect(page.locator('.meal-photo-pair')).toHaveCount(0);expect((await readJournal(page)).records).toHaveLength(2);
 });

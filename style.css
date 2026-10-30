@@ -1441,3 +1441,5 @@ body.conversation-view { overflow:hidden; }
 .conversation-view .meal-photo-pair img { height:130px;max-height:130px;object-position:center; }
 .meal-photo-pair figcaption { margin-top:7px;text-align:center;font-size:10px;color:#5d765f; }
 .meal-pair-note { margin:12px 0 0;font-size:11px;line-height:1.7;color:#5d765f;text-align:right; }
+
+.conversation-view .portion-calculation { flex-basis:100%;font-variant-numeric:tabular-nums; }

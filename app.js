@@ -1,6 +1,6 @@
 import { analyzePhoto } from "./analysis-client.js";
 import { askConcierge } from "./concierge-client.js";
-import { applyConcierge, linkedRecord, manualCapture, recordContext, contextCaptures, mealPhotoMembers, removeConversation } from "./concierge-domain.js";
+import { applyConcierge, linkedRecord, manualCapture, recordContext, contextCaptures, mealPhotoMembers, removeConversation, separateMealPhotos } from "./concierge-domain.js";
 import { renderConcierge } from "./concierge-view.js";
 import { renderDaily } from "./timeline-view.js";
 import { ACTIVITIES, energyReference } from "./energy.js";
@@ -584,6 +584,7 @@ import {
       const result=await askConcierge(capture,message,text=>{
         streamingReply={id,text};
         if(surface!=="home" || currentCapture()?.id!==id)return;
+        if(!text){render();return;}
         const messages=$('.conversation-messages'), scroller=$('.conversation-scroll');
         if(!messages||!scroller)return;
         const follow=scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<80;
@@ -671,6 +672,12 @@ import {
   function editConversationRecord() {
     const c=currentCapture(),r=c&&linkedRecord(data,c);if(!r)return;
     if(c.recordKind==='food')showFoodForm('entry',r);else if(c.recordKind==='exercise')showExerciseForm(r);else showWeightForm(r);
+  }
+  async function separateCurrentMeal() {
+    if(conciergeWorking||photoBatchWorking||busy)return;
+    const members=separateMealPhotos(data,currentCapture());
+    for(const c of members)appendChat(c,"system","서로 다른 식사로 분리했어요. 각 사진의 섭취량을 따로 확인할게요.");
+    if(await save()){render();if(store)for(const c of members)await runConcierge(c.id,"이 사진들은 같은 식사의 전후가 아니라 서로 다른 식사예요. 현재 사진 한 장에 보이는 음식을 먹은 별도 식사로 다시 분석해 줘.");}
   }
   async function deleteConversation() {
     const capture=currentCapture();if(!capture||!confirm(capture.mealPair?"이 식사와 연결된 식전·식후 사진 및 대화를 함께 삭제할까요?":"사진과 연결된 기록·대화를 삭제할까요?"))return;
@@ -1591,7 +1598,8 @@ import {
       return;
     }
     if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { if(surface==="home"&&currentCapture())selected=(linkedRecord(data,currentCapture())||currentCapture()).date; surface = "mine"; closeSheet(); render(); return; }
-    if(button.id==="reviewLeftovers") {if(!conciergeWorking&&!photoBatchWorking)void runConcierge(activeCaptureId,"함께 올린 사진 중 같은 식사의 먹기 전 사진과 먹고 남긴 사진을 비교해서 실제 먹은 양만 식사 한 건으로 반영해 줘. 명확히 같은 식사가 아니면 합치지 마.");return;}
+    if(button.id==="separateMeals") {void separateCurrentMeal();return;}
+    if(button.id==="reviewLeftovers") {if(!conciergeWorking&&!photoBatchWorking){for(const c of data.captures)if(c.batchId===currentCapture()?.batchId)delete c.pairingDisabled;void runConcierge(activeCaptureId,"함께 올린 사진 중 같은 식사의 먹기 전 사진과 먹고 남긴 사진을 비교해서 실제 먹은 양만 식사 한 건으로 반영해 줘. 명확히 같은 식사가 아니면 합치지 마.");}return;}
     if (button.id === "profileButton" || button.hasAttribute("data-profile")) { showProfile(); return; }
     if (button.id === "newPhotoFromTimeline") { surface="home"; activeCaptureId=null; render(); $("#conciergePhoto").click(); return; }
     if (button.dataset.conversation) { void openConversation(button.dataset.conversation,button.dataset.recordKind); return; }

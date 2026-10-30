@@ -65,6 +65,7 @@ export function validateJournal(value) {
     if(row.analysis && (!['food','exercise','weight','unknown'].includes(row.analysis.kind) || !Array.isArray(row.analysis.assumptions) || row.analysis.assumptions.some(s=>typeof s!=='string') || (row.analysis.kind==='food' && (!row.analysis.food || !row.analysis.food.nutrients)) || (row.analysis.kind==='exercise' && !row.analysis.exercise))) throw Error("사진 분석 형식을 확인해 주세요.");
   }
   for(const c of value.captures) {
+    if(c.pairingDisabled!==undefined&&typeof c.pairingDisabled!=="boolean")throw Error("사진 분리 상태를 확인해 주세요.");
     if(c.linkedRecordId && (!/^[a-zA-Z0-9-]+$/.test(c.linkedRecordId)||!c.mealPair||c.mealPair.afterId!==c.id||c.mealPair.beforeId!==c.linkedRecordId))throw Error("연결된 식사 사진 형식을 확인해 주세요.");
     if(c.mealPair) {
       const {beforeId,afterId}=c.mealPair;

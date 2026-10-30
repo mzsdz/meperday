@@ -7,9 +7,10 @@ export function mealPhotoMembers(journal,capture) {
   return [capture.mealPair.beforeId,capture.mealPair.afterId].map(id=>journal.captures.find(c=>c.id===id)).filter(Boolean);
 }
 export function contextCaptures(journal,capture) {
+  if(capture.pairingDisabled)return [];
   const paired=mealPhotoMembers(journal,capture);
   if(paired.length===2)return paired.filter(c=>c.id!==capture.id);
-  return capture.batchId?journal.captures.filter(c=>c.batchId===capture.batchId&&c.id!==capture.id&&!c.mealPair).slice(0,2):[];
+  return capture.batchId?journal.captures.filter(c=>c.batchId===capture.batchId&&c.id!==capture.id&&!c.mealPair&&!c.pairingDisabled).slice(0,2):[];
 }
 export function removeConversation(journal,capture) {
   const ids=new Set([capture.id,...mealPhotoMembers(journal,capture).map(c=>c.id)]);
@@ -34,6 +35,11 @@ export function applyConcierge(journal, capture, result) {
     if(result.kind!=="food"||!before||!after||before.id===after.id||![before.id,after.id].includes(capture.id)||!before.batchId||before.batchId!==after.batchId||[before,after].some(c=>c.recordKind&&c.recordKind!=="food")||(before.capturedDate&&after.capturedDate&&before.capturedDate!==after.capturedDate)||[before,after].some(c=>c.mealPair&&(c.mealPair.beforeId!==before.id||c.mealPair.afterId!==after.id)))throw Error("같은 식사의 식전·식후 사진인지 확인해 주세요.");
     target=before;members=[before,after];
   }
+  if(pair) {
+    const all=capture.mealPair?(capture.messages||[]):[...members.filter(c=>c.id!==capture.id).flatMap(c=>c.messages||[]),...(capture.messages||[])];
+    const seen=new Set(),merged=all.filter(m=>{const key=JSON.stringify([m.role,m.text]);if(seen.has(key))return false;seen.add(key);return true;}).slice(-50);
+    for(const c of members)c.messages=structuredClone(merged);
+  }
   const previous = linkedRecord(journal,target) || {};
   const ids=new Set(members.map(c=>c.id));
   for (const key of ["records","exercises","weights"]) journal[key] = (journal[key] || []).filter(r => !ids.has(r.id));
@@ -57,4 +63,12 @@ export function manualCapture(journal, capture, kind) {
   applyConcierge(journal,capture,result);
   const record=linkedRecord(journal,capture); if(record) record.source="사진만 기록 · 정보 미확인";
   capture.analysis = null;
+}
+
+export function separateMealPhotos(journal,capture) {
+  const members=mealPhotoMembers(journal,capture);
+  if(members.length!==2)return [];
+  for(const c of members){delete c.mealPair;delete c.linkedRecordId;c.pairingDisabled=true;}
+  for(const c of members)manualCapture(journal,c,'food');
+  return members;
 }

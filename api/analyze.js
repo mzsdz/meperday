@@ -118,18 +118,27 @@ export function createAnalysisHandler({
         res.setHeader("X-Accel-Buffering","no");
         res.flushHeaders?.();
         streaming=true;
-        let failure, lastReply="", lastSent=0;
+        let failure, lastReply="", pendingReply="", lastSent=0, batchTimer;
+        const flushReply=()=>{
+          clearTimeout(batchTimer);batchTimer=undefined;
+          if(!pendingReply || pendingReply===lastReply || res.destroyed || res.writableEnded)return;
+          res.write(JSON.stringify({type:"reply",text:pendingReply})+"\n");
+          lastReply=pendingReply;lastSent=Date.now();
+        };
         const generation=stream({...options,onError:({error})=>{failure=error;}});
         const completed=Promise.resolve(generation.output);
         completed.catch(()=>{});
-        for await (const partial of generation.partialOutputStream) {
-          const reply=partial?.reply;
-          if(typeof reply!=="string" || reply===lastReply)continue;
-          if(reply.length-lastReply.length<12 && Date.now()-lastSent<80)continue;
-          if(res.destroyed)throw Error("Stream disconnected");
-          res.write(JSON.stringify({type:"reply",text:reply})+"\n");
-          lastReply=reply;lastSent=Date.now();
-        }
+        try {
+          for await (const partial of generation.partialOutputStream) {
+            const reply=partial?.reply;
+            if(typeof reply!=="string" || reply===lastReply)continue;
+            if(res.destroyed)throw Error("Stream disconnected");
+            pendingReply=reply;
+            if(reply.length-lastReply.length>=12 || Date.now()-lastSent>=80)flushReply();
+            else if(!batchTimer)batchTimer=setTimeout(flushReply,Math.max(0,80-(Date.now()-lastSent)));
+          }
+          flushReply();
+        } finally {clearTimeout(batchTimer);}
         if(failure)throw failure;
         output=await completed;
         providerMetadata=await generation.providerMetadata;

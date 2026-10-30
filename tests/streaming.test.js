@@ -49,3 +49,16 @@ test('JSON photo-evidence notices remain compatible without artificial typing',a
   let updates=0;const result=await readConciergeResponse(Response.json({...answer,shouldUpdate:false}),()=>updates++);
   assert.equal(result.shouldUpdate,false);assert.equal(updates,0);
 });
+test('a small trailing phrase is flushed even if the model pauses before its next token',async()=>{
+  const res=response(),first=answer.reply.slice(0,14),second=answer.reply.slice(0,17);
+  const handler=createAnalysisHandler({concierge:true,env,clientFactory:client,stream:()=>({
+    output:Promise.resolve(answer),providerMetadata:Promise.resolve({}),partialOutputStream:(async function*(){
+      yield {reply:first};yield {reply:second};
+      await new Promise(resolve=>setTimeout(resolve,120));
+      assert.equal(JSON.parse(res.chunks.at(-1)).text,second);
+      assert.equal(res.ended,undefined);
+      yield {reply:answer.reply};
+    })(),
+  })});
+  await handler(request,res);assert.equal(JSON.parse(res.chunks.at(-1)).type,'result');
+});

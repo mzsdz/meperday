@@ -64,6 +64,14 @@ export function validateJournal(value) {
     if(row.recordKind && !['food','exercise','weight'].includes(row.recordKind)) throw Error("사진 종류를 확인해 주세요.");
     if(row.analysis && (!['food','exercise','weight','unknown'].includes(row.analysis.kind) || !Array.isArray(row.analysis.assumptions) || row.analysis.assumptions.some(s=>typeof s!=='string') || (row.analysis.kind==='food' && (!row.analysis.food || !row.analysis.food.nutrients)) || (row.analysis.kind==='exercise' && !row.analysis.exercise))) throw Error("사진 분석 형식을 확인해 주세요.");
   }
+  for(const c of value.captures) {
+    if(c.linkedRecordId && (!/^[a-zA-Z0-9-]+$/.test(c.linkedRecordId)||!c.mealPair||c.mealPair.afterId!==c.id||c.mealPair.beforeId!==c.linkedRecordId))throw Error("연결된 식사 사진 형식을 확인해 주세요.");
+    if(c.mealPair) {
+      const {beforeId,afterId}=c.mealPair;
+      const before=value.captures.find(x=>x.id===beforeId),after=value.captures.find(x=>x.id===afterId);
+      if(!before||!after||beforeId===afterId||![beforeId,afterId].includes(c.id)||!before.batchId||before.batchId!==after.batchId||c.recordKind!=="food"||!value.records.some(r=>r.id===beforeId)||before.linkedRecordId||after.linkedRecordId!==beforeId)throw Error("식사 전후 사진 연결을 확인해 주세요.");
+    }
+  }
   for (const rows of [value.records, value.exercises, value.weights, value.captures])
     for (const row of rows) {
       if (

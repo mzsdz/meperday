@@ -1,6 +1,6 @@
 import { analyzePhoto } from "./analysis-client.js";
 import { askConcierge } from "./concierge-client.js";
-import { applyConcierge, linkedRecord, manualCapture, recordContext } from "./concierge-domain.js";
+import { applyConcierge, linkedRecord, manualCapture, recordContext, contextCaptures, mealPhotoMembers, removeConversation } from "./concierge-domain.js";
 import { renderConcierge } from "./concierge-view.js";
 import { renderDaily } from "./timeline-view.js";
 import { ACTIVITIES, energyReference } from "./energy.js";
@@ -526,7 +526,7 @@ import {
     document.body.classList.toggle('journal-view',surface==='mine');
     document.body.classList.toggle('conversation-view',surface==='home'&&!!capture);
     $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
-      ? renderConcierge({capture,streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
+      ? renderConcierge({capture,pairPhotos:mealPhotoMembers(data,capture),streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
     $("#modeSwitch").hidden = surface !== "mine";
     document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
     $("#homeBtn").classList.toggle("active",surface==="home");
@@ -548,7 +548,7 @@ import {
     for (const c of data.captures) {
       const r=linkedRecord(data,c);
       if (r) {
-        c.photo=r.photo; c.photoPath=r.photoPath; c.date=r.date; c.time=r.time || "";
+        if(!c.linkedRecordId){c.photo=r.photo;c.photoPath=r.photoPath;c.date=r.date;c.time=r.time||"";}
         if(c.analysis?.kind===c.recordKind) {
           if(c.recordKind==='food') c.analysis.food={...c.analysis.food,name:r.name||null,kcal:r.kcal??null,nutrients:{...c.analysis.food.nutrients,...r.nutrients}};
           if(c.recordKind==='exercise') c.analysis.exercise={...c.analysis.exercise,type:r.type||null,minutes:r.minutes??null,calories:r.calories??null};
@@ -567,6 +567,7 @@ import {
   function appendChat(capture,role,text) {
     capture.messages.push({role,text:String(text).slice(0,1500)});
     capture.messages=capture.messages.slice(-50);
+    for(const member of mealPhotoMembers(data,capture))if(member.id!==capture.id)member.messages=structuredClone(capture.messages);
   }
   async function runConcierge(id,message="") {
     if (conciergeWorking) return;
@@ -575,7 +576,9 @@ import {
     const existing=linkedRecord(data,capture);
     if(!capture.analysis && existing) capture.analysis=recordContext(existing,capture.recordKind);
     if(message) { appendChat(capture,"user",message); if(!(await save())) {render();return;} }
-    const baseline=JSON.stringify(linkedRecord(data,capture));
+    const related=contextCaptures(data,capture);
+    const snapshot=()=>JSON.stringify([id,...related.map(c=>c.id)].map(key=>{const c=data.captures.find(c=>c.id===key);return c?{id:key,record:linkedRecord(data,c),photo:c.photo,date:c.date,time:c.time}:null;}));
+    const baseline=snapshot();
     conciergeWorking=true;streamingReply={id,text:""};render();
     try {
       const result=await askConcierge(capture,message,text=>{
@@ -593,15 +596,16 @@ import {
         }
         bubble.querySelector('p').textContent=text;
         if(follow)scroller.scrollTop=scroller.scrollHeight;
-      });
+      },related);
       streamingReply=null;
       await idleForReply();
       capture=data.captures.find(c=>c.id===id); if(!capture)return;
-      if(JSON.stringify(linkedRecord(data,capture))!==baseline) {
+      if(snapshot()!==baseline) {
         appendChat(capture,"system","답변을 준비하는 동안 기록이 바뀌어서, 직접 수정한 내용을 그대로 남겼어요.");
       } else {
         applyConcierge(data,capture,result);
         appendChat(capture,"assistant",result.reply);
+
 
       }
       await save();
@@ -633,7 +637,8 @@ import {
         else activeCaptureId=data.captures.some(c=>c.id===previousCaptureId)?previousCaptureId:null;
         if(store)for(const [index,id] of savedIds.entries()) {
           photoBatchStatus=`사진 ${savedIds.length}장 보관 완료 · ${index+1}/${savedIds.length}장 살펴보는 중…`;render();
-          await runConcierge(id);
+          const item=data.captures.find(c=>c.id===id);
+          if(!item?.mealPair)await runConcierge(id);
         }
       } finally {
         photoBatchWorking=false;
@@ -668,8 +673,8 @@ import {
     if(c.recordKind==='food')showFoodForm('entry',r);else if(c.recordKind==='exercise')showExerciseForm(r);else showWeightForm(r);
   }
   async function deleteConversation() {
-    const id=activeCaptureId;if(!id || !confirm("사진과 연결된 기록·대화를 삭제할까요?"))return;
-    for(const key of ['captures','records','exercises','weights'])data[key]=data[key].filter(r=>r.id!==id);
+    const capture=currentCapture();if(!capture||!confirm(capture.mealPair?"이 식사와 연결된 식전·식후 사진 및 대화를 함께 삭제할까요?":"사진과 연결된 기록·대화를 삭제할까요?"))return;
+    removeConversation(data,capture);
     activeCaptureId=null;if(await save())render();
   }
   function showProfile() {
@@ -1585,7 +1590,8 @@ import {
       render();
       return;
     }
-    if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { if(surface==="home"&&currentCapture())selected=currentCapture().date; surface = "mine"; closeSheet(); render(); return; }
+    if (button.id === "myPageBtn" || button.hasAttribute("data-open-journal")) { if(surface==="home"&&currentCapture())selected=(linkedRecord(data,currentCapture())||currentCapture()).date; surface = "mine"; closeSheet(); render(); return; }
+    if(button.id==="reviewLeftovers") {if(!conciergeWorking&&!photoBatchWorking)void runConcierge(activeCaptureId,"함께 올린 사진 중 같은 식사의 먹기 전 사진과 먹고 남긴 사진을 비교해서 실제 먹은 양만 식사 한 건으로 반영해 줘. 명확히 같은 식사가 아니면 합치지 마.");return;}
     if (button.id === "profileButton" || button.hasAttribute("data-profile")) { showProfile(); return; }
     if (button.id === "newPhotoFromTimeline") { surface="home"; activeCaptureId=null; render(); $("#conciergePhoto").click(); return; }
     if (button.dataset.conversation) { void openConversation(button.dataset.conversation,button.dataset.recordKind); return; }

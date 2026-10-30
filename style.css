@@ -1378,9 +1378,9 @@ body.app-view { background:#f7f8f4; }
 
 /* Conversation fills the visible viewport; only its history scrolls. */
 body.conversation-view { overflow:hidden; }
-.conversation-view .app { display:flex;flex-direction:column;position:fixed;inset:var(--viewport-top,0px) 0 auto;height:var(--viewport-height,100dvh);min-height:0;padding-bottom:0; }
+.conversation-view .app { display:flex;flex-direction:column;position:fixed;inset:var(--viewport-top,0px) 0 auto;height:var(--viewport-height,100dvh);min-height:0;padding-top:env(safe-area-inset-top);padding-bottom:0; }
 .conversation-view .topbar { flex-shrink:0;height:62px;padding-top:14px;padding-bottom:10px; }
-.conversation-view #storageStatus { top:22px; }
+.conversation-view #storageStatus { top:calc(22px + env(safe-area-inset-top)); }
 .conversation-view .bottom-nav { display:none; }
 .conversation-view #main { display:flex;flex:1;min-height:0;width:100%;padding:0 24px;overflow:hidden; }
 .conversation-view .concierge-thread { display:flex;flex-direction:column;flex:1;min-height:0;width:100%;max-width:720px;margin:0 auto; }
@@ -1423,7 +1423,7 @@ body.conversation-view { overflow:hidden; }
 @media(max-width:599px) {
   .conversation-view #main { padding:0 16px; }
   .conversation-view .topbar { height:58px;padding:12px 20px 8px; }
-  .conversation-view #storageStatus { top:20px; }
+  .conversation-view #storageStatus { top:calc(20px + env(safe-area-inset-top)); }
   .conversation-view .conversation-top { padding-bottom:10px; }
 }
 @media(max-height:500px) {

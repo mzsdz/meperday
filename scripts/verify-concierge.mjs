@@ -70,14 +70,14 @@ try {
   await page.screenshot({path:'test-results/live-chat-first-reply.png'});
   const recordId=initial.records[0].id, initialKcal=initial.records[0].kcal;
   await page.locator('#conciergeMessage').fill('사진 속 샐러드와 같은 구성을 두 그릇 먹었어. 이 음식의 먹은 양을 두 그릇으로 고쳐줘.');
-  await page.locator('#conciergeForm button').click();
+  await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.from-assistant')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   const revised=await journal();assert.equal(revised.records.length,1);assert.equal(revised.records[0].id,recordId);assert.ok(revised.records[0].kcal>initialKcal);
   const revisedKcal=revised.records[0].kcal;
-  await page.locator('#conciergeMessage').fill('어떤 기준으로 이 열량을 계산한 거야? 양을 더 추가한 것은 아니야.');await page.locator('#conciergeForm button').click();
+  await page.locator('#conciergeMessage').fill('어떤 기준으로 이 열량을 계산한 거야? 양을 더 추가한 것은 아니야.');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.from-assistant')).toHaveCount(3,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   assert.equal((await journal()).records[0].kcal,revisedKcal);
-  await page.locator('#conciergeMessage').fill('좀 적게 나온 것 같은데, 어떤 양으로 본 거야?');await page.locator('#conciergeForm button').click();
+  await page.locator('#conciergeMessage').fill('좀 적게 나온 것 같은데, 어떤 양으로 본 거야?');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.from-assistant')).toHaveCount(4,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   assert.equal((await journal()).records[0].kcal,revisedKcal);
   console.log('QA generated conversation:',JSON.stringify(await page.locator('.from-assistant p').allTextContents()));

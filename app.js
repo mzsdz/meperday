@@ -521,25 +521,24 @@ import {
     const previousChat=oldThread ? {id:oldThread.dataset.captureId,top:oldScroll?.scrollTop||0,nearEnd:!oldScroll||oldScroll.scrollHeight-oldScroll.scrollTop-oldScroll.clientHeight<80,draft:oldInput?.value||"",focused:document.activeElement===oldInput,start:oldInput?.selectionStart,end:oldInput?.selectionEnd} : null;
     voiceInput?.destroy();voiceInput=null;
     const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
-    const landing=surface==='home'&&!capture&&!accountPending;
-    document.body.classList.toggle('brand-home',landing);
-    $('#app').classList.toggle('brand-home',landing);
-    document.body.classList.toggle('app-view',!landing);
+    document.body.classList.remove('brand-home');
+    $('#app').classList.remove('brand-home');
+    document.body.classList.add('app-view');
     document.body.classList.toggle('journal-view',surface==='mine');
-    document.body.classList.toggle('conversation-view',surface==='home'&&!!capture);
-    $("#main").innerHTML = accountPending ? '<div class="card" role="status">계정 기록을 연결하고 있어요…</div>' : surface === "home"
-      ? renderConcierge({capture,pairPhotos:mealPhotoMembers(data,capture),streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
+    document.body.classList.toggle('conversation-view',surface==='home');
+    $("#main").innerHTML = surface === "home"
+      ? renderConcierge({capture:accountPending?null:capture,pending:accountPending,pairPhotos:mealPhotoMembers(data,capture),streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
     $("#modeSwitch").hidden = surface !== "mine";
     document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
     $("#homeBtn").classList.toggle("active",surface==="home");
     $("#myPageBtn").classList.toggle("active",surface==="mine");
     document.querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton").forEach(b=>b.disabled=accountPending);
-    if(surface === "home" && !accountPending) {
+    if(surface === "home") {
       bindConciergeHome();
       const scroller=$('.conversation-scroll'), input=$('#conciergeMessage');
       if(scroller) {
-        scroller.scrollTop=previousChat?.id===capture?.id&&!previousChat.nearEnd ? previousChat.top : scroller.scrollHeight;
-        if(previousChat?.id===capture?.id && input && previousChat.draft) input.value=previousChat.draft;
+        scroller.scrollTop=previousChat && previousChat.id===capture?.id&&!previousChat.nearEnd ? previousChat.top : scroller.scrollHeight;
+        if(previousChat && (!previousChat.id || previousChat.id===capture?.id) && input && previousChat.draft) input.value=previousChat.draft;
         if(input) { input.style.height='auto';input.style.height=`${Math.min(108,Math.max(38,input.scrollHeight))}px`; }
         if(previousChat?.focused && input && !input.disabled) {input.focus({preventScroll:true});input.setSelectionRange(previousChat.start,previousChat.end);}
       }
@@ -622,7 +621,7 @@ import {
     const input=$("#conciergePhoto");
     if(input)input.onclick=()=>voiceInput?.cancel();
     if(input) input.onchange=async()=>{
-      const files=Array.from(input.files||[]); if(!files.length || conciergeWorking || photoBatchWorking || busy)return;
+      const files=Array.from(input.files||[]); if(!files.length || accountPending || conciergeWorking || photoBatchWorking || busy)return;
       if(files.length>3){input.value="";toast("한 번에 최대 3장까지 선택할 수 있어요. 다시 선택해 주세요.");return;}
       photoBatchWorking=true; const batchId=uid(),savedIds=[],failures=[],previousCaptureId=activeCaptureId;render();
       try {
@@ -653,8 +652,9 @@ import {
     const composerInput=$("#conciergeMessage");
     if(composerInput) composerInput.oninput=()=>{composerInput.style.height='auto';composerInput.style.height=`${Math.min(108,Math.max(38,composerInput.scrollHeight))}px`;};
     voiceInput=bindVoiceInput({input:composerInput,button:$("#voiceInputButton"),status:$("#voiceStatus")});
+    if(accountPending && $("#voiceInputButton")) $("#voiceInputButton").disabled=true;
     const form=$("#conciergeForm");
-    if(form) form.onsubmit=async e=>{e.preventDefault();if(photoBatchWorking||conciergeWorking)return;const message=$("#conciergeMessage").value.trim();if(message){voiceInput?.cancel();$("#conciergeMessage").value="";await runConcierge(activeCaptureId,message);}};
+    if(form) form.onsubmit=async e=>{e.preventDefault();if(accountPending||photoBatchWorking||conciergeWorking)return;if(!currentCapture()){toast("먼저 + 버튼으로 사진을 첨부해 주세요. 입력한 내용은 그대로 있어요.");return;}const message=$("#conciergeMessage").value.trim();if(message){voiceInput?.cancel();$("#conciergeMessage").value="";await runConcierge(activeCaptureId,message);}};
   }
   async function openConversation(id,kind) {
     let capture=data.captures.find(c=>c.id===id);

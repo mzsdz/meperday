@@ -1451,3 +1451,15 @@ body.conversation-view { overflow:hidden; }
 .conversation-view .chat-send { flex-shrink:0; }
 .voice-status { margin:8px 4px 0;color:#5d765f;font-size:11px;line-height:1.7;text-align:center; }
 @media(max-width:359px) { .conversation-view .chat-composer { gap:6px;padding:8px; }.chat-mic,.conversation-view .chat-send { width:36px;height:36px; } }
+
+/* The chat shell is available before the account finishes connecting. */
+.concierge-start .conversation-scroll { display:flex;flex-direction:column; }
+.conversation-welcome { flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px 6px; }
+.conversation-welcome h2 { margin:0;color:#31513c;font-size:clamp(20px,5.6vw,27px);letter-spacing:-.8px;font-weight:600; }
+.conversation-welcome p { margin:13px 0 0;color:#88958a;font-size:12px;line-height:1.7; }
+.chat-attach { position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:center;width:36px;height:40px;border-radius:50%;color:#46664e;cursor:pointer; }
+.chat-attach input { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer; }
+.chat-attach:focus-within { outline:2px solid #769b79;outline-offset:2px; }
+.chat-attach:has(input:disabled) { opacity:.4;cursor:default; }
+.chat-attach input:disabled { cursor:default; }
+@media(max-width:359px) { .chat-attach { width:32px;height:36px; } }

@@ -1,3 +1,4 @@
+import {openSavedPhoto} from '../e2e/helpers.js';
 // Real production vision + private persistence, disposable QA account only.
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +49,7 @@ try {
   assert.ok(first.records.some(r=>r.id===first.captures[0].id&&r.kcal>0));assert.ok(first.exercises.some(r=>r.minutes===35&&r.calories===180));
   assert.ok(first.captures.every(c=>c.photoPath&&!c.photo&&c.messages.some(m=>m.role==='assistant')));
   await expect(page.locator('.photo-batch button')).toHaveCount(3);
-  await page.reload();await expect(page.locator('.photo-batch button')).toHaveCount(3,{timeout:20000});
+  await page.reload();await openSavedPhoto(page,(await journal()).captures[0]);await expect(page.locator('.photo-batch button')).toHaveCount(3,{timeout:20000});
   for(let i=0;i<3;i++){await page.locator('.photo-batch button').nth(i).click();await expect.poll(()=>page.locator('.photo-message img').evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);}
   await page.screenshot({path:'test-results/live-batch.png',fullPage:true});
   await page.locator('.photo-batch button').first().click();

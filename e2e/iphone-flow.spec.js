@@ -1,4 +1,4 @@
-import {mine,addManual,editRecord} from "./helpers.js";
+import {mine,addManual,editRecord,openSavedPhoto} from "./helpers.js";
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
@@ -73,7 +73,8 @@ test("food: EXIF, orientation, photo replacement, all optional fields, cancel/de
     place: "선택한 가게",
     note: "메모",
   });
-  // Returning from a conversation now opens that record's date directly.
+  // Previous photos are opened explicitly from their record date.
+  await openSavedPhoto(page,saved);
   await editRecord(page,"food");
   page.once("dialog", (d) => d.dismiss());
   await page.locator("#deleteFood").click();

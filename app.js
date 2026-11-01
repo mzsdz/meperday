@@ -263,7 +263,7 @@ import {
   data.weights ??= [];
   data.captures ??= [];
   data.profile ??= {};
-  let surface = "home", activeCaptureId = data.captures.at(-1)?.id || null, conciergeWorking = false, streamingReply = null, voiceInput = null;
+  let surface = "home", activeCaptureId = null, conciergeWorking = false, streamingReply = null, voiceInput = null;
   let photoBatchWorking=false, photoBatchStatus="";
   let selected = TODAY,
     view = "day",
@@ -520,7 +520,7 @@ import {
     const oldThread=$('.concierge-thread'), oldScroll=$('.conversation-scroll'), oldInput=$('#conciergeMessage');
     const previousChat=oldThread ? {id:oldThread.dataset.captureId,top:oldScroll?.scrollTop||0,nearEnd:!oldScroll||oldScroll.scrollHeight-oldScroll.scrollTop-oldScroll.clientHeight<80,draft:oldInput?.value||"",focused:document.activeElement===oldInput,start:oldInput?.selectionStart,end:oldInput?.selectionEnd} : null;
     voiceInput?.destroy();voiceInput=null;
-    const capture = data.captures.find(c => c.id === activeCaptureId) || (activeCaptureId === null ? null : data.captures.at(-1));
+    const capture = data.captures.find(c => c.id === activeCaptureId) || null;
     document.body.classList.remove('brand-home');
     $('#app').classList.remove('brand-home');
     document.body.classList.add('app-view');
@@ -1671,7 +1671,7 @@ import {
     }
     const connectedStore = createJournalStore(cloud, auth.session.user.id);
     data = (await connectedStore.load()) || seed();
-    activeCaptureId = data.captures?.at(-1)?.id || null;
+    activeCaptureId = null;
     store = connectedStore;
     accountPending = false;
     committed = structuredClone(data);

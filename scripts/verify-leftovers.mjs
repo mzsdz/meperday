@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {createClient} from '@supabase/supabase-js';
 import {webkit,expect} from '@playwright/test';
 import {readConciergeResponse} from '../concierge-client.js';
-import {mine} from '../e2e/helpers.js';
+import {mine,openSavedPhoto} from '../e2e/helpers.js';
 const origin=process.env.VERIFY_BROWSER_URL||'https://meperday.vercel.app';
 const config={auth:{persistSession:false,autoRefreshToken:false}};
 const admin=createClient(process.env.VITE_SUPABASE_URL,process.env.TEST_SUPABASE_ADMIN_KEY,config);
@@ -57,9 +57,9 @@ try {
  await page.screenshot({path:'test-results/live-leftovers-pair.png'});
  await page.locator('#conciergeMessage').fill('남긴 양을 이미 빼고 계산한 거지? 이유만 설명해 줘. 양은 바꾸지 마.');await page.locator('#conciergeForm button[type="submit"]').click();
  await expect(page.locator('.from-assistant')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();assert.equal((await journal()).payload.records[0].kcal,kcal);
- await page.reload();await expect(page.locator('.meal-photo-pair img')).toHaveCount(2,{timeout:20000});
+ await page.reload();await openSavedPhoto(page,(await journal()).payload.captures[0]);await expect(page.locator('.meal-photo-pair img')).toHaveCount(2,{timeout:20000});
  await page.locator('.photo-batch button').nth(1).click();await page.locator('#editConversationRecord').click();await page.locator('#foodKcal').fill('321');await page.locator('#foodForm button[type="submit"]').click();await expect(page.locator('#overlay')).toHaveClass(/hidden/);
- await page.reload();await expect(page.locator('.conversation-fact')).toContainText('321');
+ await page.reload();await openSavedPhoto(page,(await journal()).payload.captures[0]);await expect(page.locator('.conversation-fact')).toContainText('321');
  const edited=(await journal()).payload;assert.equal(edited.records.length,1);assert.equal(edited.captures[1].photoPath,first.captures[1].photoPath);
  await mine(page);await expect(page.locator('.timeline-row')).toHaveCount(1);await expect(page.locator('.cal-big')).toContainText('321');await page.locator('.timeline-row').click();
  page.once('dialog',d=>d.accept());await page.locator('#deleteConversation').click();await expect(page.locator('.photo-message')).toHaveCount(0);await page.reload();await expect(page.locator('#conciergePhoto')).toHaveCount(1);assert.equal((await journal()).payload.records.length,0);assert.equal((await journal()).payload.captures.length,0);
@@ -67,7 +67,7 @@ try {
  await uploadPair();const legacy=await journal();legacy.payload.records=[];
  for(const c of legacy.payload.captures){delete c.mealPair;delete c.linkedRecordId;c.analysis={...full,mealPhotos:null};legacy.payload.records.push({id:c.id,date:c.date,time:c.time,photoPath:c.photoPath,name:full.food.name,kcal:full.food.kcal,nutrients:full.food.nutrients,meal:'entry',source:'QA regression: legacy independent-photo records'});}
  const seeded=await owner.from('meday_journals').update({payload:legacy.payload,revision:legacy.revision+1}).eq('user_id',id).eq('revision',legacy.revision);if(seeded.error)throw seeded.error;
- await page.reload();await page.locator('#reviewLeftovers').click();await expect(page.locator('.meal-photo-pair img')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
+ await page.reload();await openSavedPhoto(page,(await journal()).payload.captures[0]);await page.locator('#reviewLeftovers').click();await expect(page.locator('.meal-photo-pair img')).toHaveCount(2,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
  const repaired=(await journal()).payload;assert.equal(repaired.records.length,1);if(repaired.records[0].kcal!==null){const p=repaired.captures[0].analysis.portions;assert.equal(repaired.records[0].kcal,Math.round(p.before.kcal-p.leftovers.kcal));assert.ok(repaired.records[0].kcal<p.before.kcal);}assert.equal(repaired.captures.length,2);
  assert.deepEqual(errors,[]);console.log(JSON.stringify({result:'PASS: real vision comparison → one consumed meal → question does not deduct again → private photo reload → manual edit preserves both photos → deletion → legacy duplicate repair',servedEstimate:full.food.kcal,consumedEstimate:kcal,repairedEstimate:repaired.records[0].kcal,fixtures:'controlled meal diagrams, not calorie ground truth'}));
 } catch(error){if(page)console.log('QA visible state:',await page.locator('body').innerText().catch(()=>''));throw error;}

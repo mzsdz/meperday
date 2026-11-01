@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mine, addManual } from "./helpers.js";
+import { mine, addManual, openSavedPhoto } from "./helpers.js";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 const photo=fileURLToPath(new URL("./fixtures/oriented-exif.jpg",import.meta.url));
@@ -14,7 +14,7 @@ for (const width of [320,393,430]) test(`${width}px one photo home keeps a compl
   await expect(page.locator('#conciergeMessage')).toHaveValue('사진과 함께 남길 설명');await expect(page.locator('.photo-message')).toHaveCount(0);
   const picker=page.waitForEvent('filechooser');await page.locator('.chat-attach').click();await (await picker).setFiles(photo);
   await expect(page.locator('.photo-message img')).toBeVisible();await expect(page.locator('#conciergeMessage')).toHaveValue('사진과 함께 남길 설명');
-  await page.reload();await expect(page.locator('.photo-message img')).toBeVisible();
+  await page.reload();await reopenPhoto(page);await expect(page.locator('.photo-message img')).toBeVisible();
   await page.locator('#conciergeMessage').fill('밥 두 공기였어');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');
   await page.locator('[data-classify="food"]').click();await mine(page);
@@ -31,6 +31,7 @@ function datedPhoto(date,time='08:09:10') {
   buffer.write(`${date.replaceAll('-',':')} ${time}`,offset,'ascii');
   return {name:`${date}.jpg`,mimeType:'image/jpeg',buffer};
 }
+async function reopenPhoto(page,index=0){await expect(page.locator('.concierge-start')).toBeVisible();await expect(page.locator('.photo-message,.photo-batch,.from-user,.from-assistant')).toHaveCount(0);const j=await readJournal(page);await openSavedPhoto(page,j.captures[index]);}
 const readJournal=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('meday-mvp-v02')));
 test('three photos keep independent dates, times and conversations through reload and month navigation',async({page})=>{
   await page.goto('/');await expect(page.locator('#conciergePhoto')).toHaveAttribute('multiple','');
@@ -42,7 +43,7 @@ test('three photos keep independent dates, times and conversations through reloa
   expect(j.captures[2]).toMatchObject({time:'',capturedDate:null});
   await expect(page.locator('.photo-batch button')).toHaveCount(3);
   await page.locator('.photo-batch button').nth(1).click();await expect(page.locator('.capture-stamp')).toContainText('2026-10-25 18:30');
-  await page.reload();await expect(page.locator('.photo-batch button')).toHaveCount(3);
+  await page.reload();await reopenPhoto(page);await expect(page.locator('.photo-batch button')).toHaveCount(3);
   await page.locator('.photo-batch button').nth(2).click();await expect(page.locator('.capture-stamp')).toContainText('촬영일 미확인');
   await page.locator('.photo-batch button').first().click();await page.locator('[data-classify="food"]').click();await mine(page);
   await expect(page.locator('.date-title')).toContainText('10월 27일');await expect(page.locator('.timeline-row')).toContainText('08:09');
@@ -55,7 +56,7 @@ test('more than three files are rejected without silently dropping any selection
 test('a broken middle image leaves both good records saved and identifies the failed file',async({page})=>{
   await page.goto('/');await page.locator('#conciergePhoto').setInputFiles([datedPhoto('2026-10-27'),{name:'broken.png',mimeType:'image/png',buffer:Buffer.from('invalid image')},{name:'good.png',mimeType:'image/png',buffer:png}]);
   await expect(page.locator('.batch-status')).toContainText('3장 중 2장 보관 완료');await expect(page.locator('.batch-status')).toContainText('broken.png');expect((await readJournal(page)).captures).toHaveLength(2);
-  await page.reload();expect((await readJournal(page)).captures).toHaveLength(2);await expect(page.locator('.photo-batch button')).toHaveCount(2);
+  await page.reload();await reopenPhoto(page);expect((await readJournal(page)).captures).toHaveLength(2);await expect(page.locator('.photo-batch button')).toHaveCount(2);
 });
 test('a save failure in the middle does not roll back an earlier saved photo or duplicate it on the next save',async({page})=>{
   await page.goto('/');await page.evaluate(()=>{const original=Storage.prototype.setItem;let failed=false;Storage.prototype.setItem=function(key,value){if(key==='meday-mvp-v02'&&!failed&&JSON.parse(value).captures.length===2){failed=true;throw new DOMException('test storage failure','QuotaExceededError');}return original.call(this,key,value);};});
@@ -102,7 +103,7 @@ test('chat keeps a compact photo and reachable composer as the viewport shrinks,
     })).toBe(true);
   }
   await page.locator('#conciergeMessage').fill('아직 보내지 않은 설명');
-  await page.reload();await expect(page.locator('.from-user')).toHaveCount(3);
+  await page.reload();await reopenPhoto(page);await expect(page.locator('.from-user')).toHaveCount(3);
   await expect(page.locator('.conversation-messages')).toContainText('어떤 양으로 본 거야?');
   await page.locator('.conversation-actions [data-open-journal]').click();await expect(page.locator('.timeline-row')).toHaveCount(1);
 });
@@ -117,7 +118,7 @@ async function seedPairedGuest(page) {
     for(const c of [before,after]){c.recordKind='food';c.mealPair=pair;c.analysis={kind:'food',reply:'테스트용 식사 전후 비교 기록이에요.',assumptions:[],shouldUpdate:true,food,exercise:null,weightKg:null,mealPhotos:pair};}
     after.linkedRecordId=before.id;j.records=[{...before,name:food.name,kcal:300,meal:'entry',nutrients:food.nutrients}];
     localStorage.setItem('meday-mvp-v02',JSON.stringify(j));
-  });await page.reload();
+  });await page.reload();await reopenPhoto(page);
 }
 
 // Explicit saved-data fixture: checks paired record UI independently of a model's estimates.
@@ -128,7 +129,7 @@ for(const width of [320,393,430])test(`${width}px paired before/leftover evidenc
   const afterSrc=await page.locator('.meal-photo-pair img').nth(1).getAttribute('src');
   await page.locator('.photo-batch button').nth(1).click();await page.locator('#editConversationRecord').click();
   await page.locator('#foodKcal').fill('250');await page.locator('#foodForm button[type="submit"]').click();
-  await page.reload();await expect(page.locator('.conversation-fact')).toContainText('250');
+  await page.reload();await reopenPhoto(page);await expect(page.locator('.conversation-fact')).toContainText('250');
   await expect(page.locator('.meal-photo-pair img').nth(1)).toHaveAttribute('src',afterSrc);
   await mine(page);await expect(page.locator('.timeline-row')).toHaveCount(1);await expect(page.locator('.cal-big')).toContainText('250');
   await page.locator('.timeline-row').click();page.once('dialog',d=>d.accept());await page.locator('#deleteConversation').click();
@@ -139,5 +140,5 @@ test('a user can split an incorrect pair without losing either photo or keeping 
   await page.goto('/');await seedPairedGuest(page);await page.locator('#separateMeals').click();
   await expect(page.locator('.meal-photo-pair')).toHaveCount(0);
   const j=await readJournal(page);expect(j.records).toHaveLength(2);expect(j.records.every(r=>r.kcal===null)).toBe(true);expect(j.captures).toHaveLength(2);expect(j.captures.every(c=>c.pairingDisabled&&!c.mealPair&&!c.linkedRecordId)).toBe(true);
-  await page.reload();await expect(page.locator('.photo-batch button')).toHaveCount(2);await expect(page.locator('.meal-photo-pair')).toHaveCount(0);expect((await readJournal(page)).records).toHaveLength(2);
+  await page.reload();await reopenPhoto(page);await expect(page.locator('.photo-batch button')).toHaveCount(2);await expect(page.locator('.meal-photo-pair')).toHaveCount(0);expect((await readJournal(page)).records).toHaveLength(2);
 });

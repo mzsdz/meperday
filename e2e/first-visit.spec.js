@@ -155,8 +155,8 @@ for(const width of [320,393,430])test(`${width}px chat opens while account recor
     await page.locator('#conciergeForm').evaluate(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
     expect(writes).toBe(0);await expect(page.locator('#conciergeMessage')).toHaveValue('오늘 점심은 절반만 먹었어');
     if(width===393)await page.screenshot({path:testInfo.outputPath('chat-while-connecting.png')});
-    release();await expect(page.locator('#storageStatus')).toHaveText('내 계정 · 서버 저장');
-    await expect(page.locator('.concierge-thread')).toHaveAttribute('data-capture-id','account-photo');
+    release();await expect(page.locator('#storageStatus')).toHaveText('내 계정 · 서버 저장');await expect(page.locator('.photo-message,.photo-batch')).toHaveCount(0);
+    await expect(page.locator('.concierge-thread')).toHaveAttribute('data-capture-id','');
     await expect(page.locator('#conciergeMessage')).toHaveValue('오늘 점심은 절반만 먹었어');await expect(page.locator('#conciergePhoto')).toBeEnabled();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.setViewportSize({width,height:400});await expect.poll(async()=>{const box=await page.locator('#conciergeForm').boundingBox();return box.y+box.height<=400;}).toBe(true);

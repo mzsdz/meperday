@@ -91,3 +91,5 @@ AI는 함께 올린 최대 3장 중 현재 사진과 관련 사진을 함께 봅
 지원 여부와 권한은 브라우저에 따라 다릅니다. 미지원 또는 권한 거부 시 기존 입력을 유지하고 Safari/키보드 받아쓰기를 안내합니다. Safari에서는 Siri·받아쓰기 설정이 필요할 수 있습니다. 자동 검증은 음성 인식 이벤트를 통제하여 입력/중지/오류/화면 전환을 검사하며, 실제 iPhone 마이크·시스템 권한 창·음성 인식 정확도는 실기기 확인 범위입니다.
 
 The app opens directly into the photo conversation, including a `+` photo attachment button and microphone. The chat shell and draft are available while the account loads in the background. Upload, send, and account-record navigation wait for account resolution; a failed account load never falls back to saving into the guest journal. Draft text survives the transition into loaded account records. Text alone does not create a photo record.
+
+Every fresh visit or page reload starts with an empty photo chat. Existing device and account photos/messages are retained in My Records and are opened only by selecting a record; account hydration does not automatically select the latest capture.

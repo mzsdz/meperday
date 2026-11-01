@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { webkit, expect } from '@playwright/test';
-import { mine } from '../e2e/helpers.js';
+import { mine, openSavedPhoto } from '../e2e/helpers.js';
 const origin=process.env.VERIFY_BROWSER_URL || 'http://127.0.0.1:4180';
 const config={auth:{persistSession:false,autoRefreshToken:false}};
 const admin=createClient(process.env.VITE_SUPABASE_URL,process.env.TEST_SUPABASE_ADMIN_KEY,config);
@@ -81,7 +81,7 @@ try {
   await expect(page.locator('.from-assistant')).toHaveCount(4,{timeout:60000});await expect(page.locator('#conciergeMessage')).toBeEnabled();
   assert.equal((await journal()).records[0].kcal,revisedKcal);
   console.log('QA generated conversation:',JSON.stringify(await page.locator('.from-assistant p').allTextContents()));
-  await page.reload();await expect(page.locator('.from-assistant')).toHaveCount(4,{timeout:20000});
+  await page.reload();await openSavedPhoto(page,(await journal()).captures[0]);await expect(page.locator('.from-assistant')).toHaveCount(4,{timeout:20000});
   await expect.poll(()=>page.locator('.photo-message img').evaluate(img=>img.naturalWidth),{timeout:20000}).toBeGreaterThan(0);
   await expect(page.locator('.conversation-messages')).toContainText('두 그릇');
   await page.screenshot({path:'test-results/live-conversation.png',fullPage:true});

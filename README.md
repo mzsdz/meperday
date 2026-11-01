@@ -89,3 +89,5 @@ AI는 함께 올린 최대 3장 중 현재 사진과 관련 사진을 함께 봅
 대화 입력창의 마이크는 브라우저의 SpeechRecognition / webkitSpeechRecognition으로 한국어를 받아씁니다. 브라우저가 제공하는 음성 인식 서비스를 사용하며, me/day 서버에 음성 파일을 업로드하거나 보관하지 않습니다. 말한 내용은 글자로 먼저 입력하고 사용자가 전송해야만 사진 대화에 반영됩니다. 기존 입력을 보존하고 중간 인식 결과를 중복 추가하지 않습니다. 직접 타이핑하거나 다른 화면으로 이동하면 인식을 중지하고 늦은 결과를 무시합니다.
 
 지원 여부와 권한은 브라우저에 따라 다릅니다. 미지원 또는 권한 거부 시 기존 입력을 유지하고 Safari/키보드 받아쓰기를 안내합니다. Safari에서는 Siri·받아쓰기 설정이 필요할 수 있습니다. 자동 검증은 음성 인식 이벤트를 통제하여 입력/중지/오류/화면 전환을 검사하며, 실제 iPhone 마이크·시스템 권한 창·음성 인식 정확도는 실기기 확인 범위입니다.
+
+The app opens directly into the photo conversation, including a `+` photo attachment button and microphone. The chat shell and draft are available while the account loads in the background. Upload, send, and account-record navigation wait for account resolution; a failed account load never falls back to saving into the guest journal. Draft text survives the transition into loaded account records. Text alone does not create a photo record.

@@ -9,7 +9,11 @@ for (const width of [320,393,430]) test(`${width}px one photo home keeps a compl
   await expect(page.locator('#modeSwitch')).toBeHidden();await expect(page.locator('.cal-big')).toHaveCount(0);await expect(page.locator('#pointsButton')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
   if(width===393) await page.screenshot({path:testInfo.outputPath('home.png')});
-  await page.locator('#conciergePhoto').setInputFiles(photo);await expect(page.locator('.photo-message img')).toBeVisible();
+  await expect(page.locator('#conciergeMessage')).toBeVisible();
+  await page.locator('#conciergeMessage').fill('사진과 함께 남길 설명');await page.locator('#conciergeForm button[type="submit"]').click();
+  await expect(page.locator('#conciergeMessage')).toHaveValue('사진과 함께 남길 설명');await expect(page.locator('.photo-message')).toHaveCount(0);
+  const picker=page.waitForEvent('filechooser');await page.locator('.chat-attach').click();await (await picker).setFiles(photo);
+  await expect(page.locator('.photo-message img')).toBeVisible();await expect(page.locator('#conciergeMessage')).toHaveValue('사진과 함께 남길 설명');
   await page.reload();await expect(page.locator('.photo-message img')).toBeVisible();
   await page.locator('#conciergeMessage').fill('밥 두 공기였어');await page.locator('#conciergeForm button[type="submit"]').click();
   await expect(page.locator('.conversation-messages')).toContainText('로그인해 주세요');

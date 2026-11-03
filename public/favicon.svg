@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="m/day">
   <rect width="64" height="64" rx="16" fill="#1b2d25"/>
-  <path d="M12 44V29c0-6 12-6 12 1v14m0-14c0-7 12-7 12 0v14" fill="none" stroke="#f7f8f4" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="m40 50 9-33" stroke="#7ca896" stroke-width="6"/>
-  <circle cx="53" cy="11" r="3" fill="#7ca896"/>
+  <g fill="none" stroke="#f7f8f4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 29V17c0-6 11-6 11 1v11m0-11c0-7 11-7 11 0v11" stroke-width="4.8"/>
+    <path d="M23 35v17m0-6c0-9-12-9-12 0s12 9 12 0m16-6v12m0-6c0-9-12-9-12 0s12 9 12 0m6-6 5 10m5-10-8 17" stroke-width="3.8"/>
+  </g>
+  <path d="m40 32 7-25" stroke="#7ca896" stroke-width="4.8"/>
+  <circle cx="53" cy="9" r="2.5" fill="#7ca896"/>
 </svg>

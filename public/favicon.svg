@@ -1,9 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="m/day">
-  <rect width="64" height="64" rx="16" fill="#1b2d25"/>
-  <g fill="none" stroke="#f7f8f4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M13 29V17c0-6 11-6 11 1v11m0-11c0-7 11-7 11 0v11" stroke-width="4.8"/>
-    <path d="M23 35v17m0-6c0-9-12-9-12 0s12 9 12 0m16-6v12m0-6c0-9-12-9-12 0s12 9 12 0m6-6 5 10m5-10-8 17" stroke-width="3.8"/>
-  </g>
-  <path d="m40 32 7-25" stroke="#7ca896" stroke-width="4.8"/>
-  <circle cx="53" cy="9" r="2.5" fill="#7ca896"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="me/day">
+  <rect width="64" height="64" rx="16" fill="#f7f8f4"/>
+  <text x="2" y="37" fill="#1b2925" font-family="-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif" font-size="16" font-weight="780" letter-spacing="-1.15" textLength="57" lengthAdjust="spacingAndGlyphs" style="font-synthesis:none">me<tspan fill="#719e8e">/</tspan>day</text>
+  <circle cx="61" cy="23" r="1.1" fill="#7bad9a"/>
 </svg>

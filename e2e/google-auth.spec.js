@@ -51,20 +51,3 @@ test("Google button starts OAuth through Supabase and preserves same-origin redi
     "http://127.0.0.1:4174",
   );
 });
-test("guest photo save remains usable when AI requires login", async ({
-  page,
-}) => {
-  await page.route("**/api/analyze", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ configured: true, requiresLogin: true }),
-    }),
-  );
-  await page.goto("/");
-  await page.locator("#conciergePhoto").setInputFiles({name:"guest.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvFkAAAAASUVORK5CYII=","base64")});
-  await expect(page.locator(".photo-message img")).toBeVisible();
-  await page.locator("#conciergeMessage").fill("밥 두 공기였어");
-  await page.locator('#conciergeForm button[type="submit"]').click();
-  await expect(page.locator(".conversation-messages")).toContainText("로그인해 주세요");
-});

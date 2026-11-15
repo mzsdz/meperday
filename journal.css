@@ -1,0 +1,104 @@
+/* Photo journal: three calm, independent spaces. */
+.nutrition-app {background:#f5f6f1;color:#24392c;overflow:auto;}
+.nutrition-app .app {max-width:760px;min-height:100dvh;padding-bottom:calc(108px + env(safe-area-inset-bottom));}
+.nutrition-app main {padding:12px 24px 28px;}
+.nutrition-app .mode-switch[hidden] {display:none;}
+.nutrition-app .topbar {height:86px;}
+.nutrition-app .bottom-nav {max-width:700px;gap:4px;padding:6px;bottom:calc(16px + env(safe-area-inset-bottom));}
+.nutrition-app .bottom-link {min-height:48px;gap:7px;font-size:13px;}
+.nav-symbol {font-size:22px;line-height:1;}
+.page-heading {margin:18px 0 24px;}
+.page-heading h1 {font-size:25px;letter-spacing:-1px;line-height:1.4;margin:6px 0;}
+.page-heading .eyebrow {letter-spacing:.18em;color:#7b907f;font-size:10px;}
+.calorie-board {display:grid;grid-template-columns:1.2fr 1fr 1fr;padding:27px 16px;border-radius:26px;background:#213e2d;color:#f6faf3;gap:8px;box-shadow:0 12px 30px #24392c0a;}
+.calorie-board div {min-width:0;text-align:center;}
+.calorie-board div+div {border-left:1px solid #ffffff20;}
+.calorie-board span,.calorie-board small {display:block;color:#b8d2be;font-size:11px;}
+.calorie-board strong {display:block;margin:9px 0;font-size:clamp(23px,5.5vw,36px);font-variant-numeric:tabular-nums;letter-spacing:-1.3px;line-height:1.15;}
+.calorie-board div:first-child strong {color:#d2f2bd;}
+.board-note {font-size:10px;color:#71806e;line-height:1.7;margin:11px 3px 24px;}
+.record-upload {display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;border:1px solid #cedbc9;border-radius:20px;min-height:78px;cursor:pointer;position:relative;}
+.record-upload>span {font-size:30px;color:#568066;font-weight:300;}
+.record-upload strong {font-size:16px;}
+.record-upload input {position:absolute;width:1px;height:1px;opacity:0;}
+.record-upload:focus-within {outline:2px solid #5d8a73;outline-offset:3px;}
+.record-upload:has(input:disabled) {opacity:.55;cursor:wait;}
+.journal-date {display:flex;align-items:center;gap:8px;margin:27px 0 24px;}
+.journal-date input {flex:1;min-width:0;width:100%;height:42px;border:0;background:transparent;text-align:center;font-size:15px;color:#34503b;}
+.journal-date button {border:1px solid #dde5d8;border-radius:50%;background:#fff;color:#36513e;min-width:36px;height:36px;}
+.journal-date #goToday {border-radius:16px;min-width:46px;font-size:12px;}
+.food-entries {display:grid;gap:12px;margin-bottom:16px;}
+.food-entry {display:grid;grid-template-columns:85px minmax(0,1fr)12px;gap:16px;width:100%;align-items:center;border:1px solid #e0e7da;border-radius:22px;padding:12px;background:#fff;color:#294230;text-align:left;}
+.entry-image {height:96px;border-radius:14px;overflow:hidden;background:#ecf1e6;display:grid;place-items:center;color:#71866e;}
+.entry-image img {width:100%;height:100%;object-fit:cover;}
+.entry-info {display:grid;gap:7px;min-width:0;}
+.entry-info strong {font-size:15px;line-height:1.5;overflow-wrap:anywhere;}
+.entry-info>span {font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;}
+.entry-info small {font-size:10px;line-height:1.5;color:#7d8b79;}
+.entry-info small b {font-size:13px;color:#4e7154;margin-right:8px;}
+.empty-journal {padding:40px 20px;text-align:center;color:#71856d;}
+.empty-journal>span {font-size:40px;color:#a8bba0;}
+.empty-journal h2 {font-size:17px;margin:13px 0;}
+.empty-journal p {font-size:13px;line-height:1.9;}
+.module-group-title {font-size:16px;margin:28px 0 14px;}
+.module-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.nutrient-module {padding:18px 16px;background:#fff;border:1px solid #dfe7d9;border-radius:22px;min-width:0;}
+.module-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.module-heading h3 {font-size:14px;margin:0;}
+.module-remove {border:0;background:transparent;color:#899683;min-height:32px;min-width:32px;font-size:20px;}
+.module-amount {display:flex;align-items:baseline;justify-content:space-between;gap:5px;flex-wrap:wrap;}
+.module-amount strong {font-size:23px;letter-spacing:-.6px;font-variant-numeric:tabular-nums;}
+.module-amount small {font-size:10px;font-weight:400;}
+.module-amount>span {font-size:12px;color:#65845c;}
+.module-track {height:8px;border-radius:8px;background:#edf2e7;margin:15px 0 11px;overflow:hidden;}
+.module-track i {height:100%;display:block;background:#6e9c5f;border-radius:8px;}
+.nutrient-module p {font-size:10px;color:#73856c;line-height:1.7;margin:0 0 8px;}
+.module-reference {background:none;border:0;color:#84907e;font-size:10px;text-align:left;line-height:1.6;padding:0;min-height:30px;}
+.limit-module {background:#fffdf9;border-color:#ebe2d6;}
+.limit-module .module-track {background:#f3e9de;}
+.limit-module .module-track i {background:#c3875c;}
+.limit-module .module-amount>span,.limit-module p {color:#a17454;}
+.add-module {width:100%;border:1.5px dashed #bdcbb6;background:transparent;border-radius:22px;display:grid;justify-items:center;gap:6px;padding:21px;color:#64805c;font-size:13px;margin:22px 0;}
+.add-module span {font-size:30px;}
+.reference-note {font-size:11px;color:#788872;line-height:1.9;margin:24px 0;}
+.reference-note summary {cursor:pointer;}
+.reference-note a {color:#476c43;}
+.weight-period {display:flex;background:#e9efe3;padding:4px;border-radius:20px;max-width:220px;margin:0 auto;}
+.weight-period button {flex:1;background:transparent;border:0;border-radius:17px;padding:10px;color:#718369;}
+.weight-period button[aria-pressed=true] {background:#fff;color:#2d4b34;box-shadow:0 2px 4px #233c2b08;}
+.weight-overview>strong {font-size:46px;letter-spacing:-2px;font-variant-numeric:tabular-nums;}
+.weight-overview>strong small {font-size:15px;letter-spacing:0;font-weight:400;}
+.weight-chart {width:100%;height:auto;display:block;max-height:250px;}
+.weight-chart text {font-family:inherit;fill:#7a8e73;font-size:10px;}
+.weight-chart-empty {text-align:center;padding:48px 10px;color:#87977f;font-size:13px;line-height:1.8;}
+.weight-entry {display:flex;gap:15px;align-items:center;background:#fff;border:1px solid #e0e7da;border-radius:18px;padding:14px;width:100%;text-align:left;margin:12px 0;color:#324e38;}
+.weight-entry img {width:64px;height:64px;object-fit:cover;border-radius:12px;}
+.weight-entry>span:nth-child(2) {flex:1;display:grid;gap:8px;}
+.weight-entry small {font-size:11px;color:#7c8a76;}
+.food-search {margin-top:22px;}
+#foodSearchResults,#nutrientResults {max-height:280px;overflow:auto;overscroll-behavior:contain;}
+.food-result {display:grid;gap:5px;text-align:left;padding:14px 12px;width:100%;background:#fff;border:0;border-bottom:1px solid #e6ecdf;color:#365039;min-height:60px;}
+.food-result:hover {background:#f1f6eb;}
+.food-result strong {font-size:14px;}
+.food-result small {color:#798b71;font-size:11px;line-height:1.6;}
+.suggestion-box {background:#f0f5e9;border:1px solid #e0e9d6;border-radius:18px;padding:16px;margin:16px 0;}
+.suggestion-box h3 {font-size:14px;}.suggestion-box p {font-size:12px;line-height:1.7;color:#708167;}
+.suggestion-box .food-result {background:transparent;}
+.food-item {border:1px solid #dfe7d8;background:#fff;border-radius:20px;padding:18px;margin:18px 0;}
+.food-item input {max-width:100%;}
+.food-item details {font-size:12px;margin-top:18px;color:#7c8b73;}
+.portion-label {font-size:12px;color:#68825e;}
+.portion-options {display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 14px;}
+.portion-options button {border:1px solid #dfe7d7;background:#fff;border-radius:16px;color:#607a55;padding:9px 12px;font-size:12px;min-height:38px;}
+.portion-options button[aria-pressed=true] {background:#294b34;border-color:#294b34;color:#fff;}
+.item-consumed {display:block;font-size:20px;margin:13px 0;color:#365c37;}
+.food-total {display:flex;justify-content:space-between;gap:12px;background:#edf3e6;padding:20px;border-radius:18px;align-items:center;}
+.food-total span {font-size:12px;}.food-total strong {font-size:23px;}
+.danger {color:#ac6255!important;}
+.nutrition-app .sheet {max-height:calc(var(--viewport-height,100dvh) - 24px);padding-bottom:calc(30px + env(safe-area-inset-bottom));}
+.nutrition-app .sheet input,.nutrition-app .sheet textarea {font-size:16px;min-width:0;}
+.nutrition-app .sheet input[type=date],.nutrition-app .sheet input[type=time] {width:100%;min-height:46px;-webkit-appearance:none;}
+.nutrition-app .uploadbox {display:flex;position:relative;flex-direction:column;align-items:center;justify-content:center;width:100%;}
+.nutrition-app .upload-preview {max-height:230px;object-fit:contain;}
+@media(min-width:650px){.nutrition-app main{padding:20px 38px 32px}.module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.calorie-board{padding:32px 24px}.food-entry{grid-template-columns:100px minmax(0,1fr)12px}.entry-image{height:104px}}
+@media(max-width:360px){.nutrition-app main{padding:8px 16px 24px}.module-grid{gap:8px}.nutrient-module{padding:13px 12px}.module-amount strong{font-size:20px}.calorie-board{padding:23px 10px}.nutrition-app .bottom-link{font-size:12px}}

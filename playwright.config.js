@@ -3,55 +3,12 @@ const chromiumUse = { channel: process.env.CI ? "chrome" : "msedge" };
 export default defineConfig({
   testDir: "./e2e",
   projects: [
-    { name: "local", testMatch: "journal.spec.js", use: chromiumUse },
-    {
-      name: "iphone-flow",
-      testMatch: ["iphone-flow.spec.js", "weight-points.spec.js", "concierge.spec.js", "voice-input.spec.js"],
-      use: chromiumUse,
-    },
-    {
-      name: "upload-layout",
-      testMatch: "upload-layout.spec.js",
-      use: chromiumUse,
-    },
-    ...(process.env.PLAYWRIGHT_WEBKIT
-      ? [
-          {
-            name: "webkit-upload",
-            testMatch: [
-              "upload-layout.spec.js",
-              "iphone-flow.spec.js",
-              "weight-points.spec.js",
-              "concierge.spec.js",
-              "voice-input.spec.js",
-            ],
-            use: {
-              browserName: "webkit",
-              isMobile: true,
-              hasTouch: true,
-            },
-          },
-        ]
-      : []),
-    ...(process.env.PLAYWRIGHT_WEBKIT
-      ? [
-          {
-            name: "webkit-auth",
-            testMatch: ["first-visit.spec.js", "google-auth.spec.js"],
-            use: {
-              browserName: "webkit",
-              isMobile: true,
-              hasTouch: true,
-              baseURL: "http://127.0.0.1:4174",
-            },
-          },
-        ]
-      : []),
-    {
-      name: "configured-guest",
-      testMatch: ["first-visit.spec.js", "google-auth.spec.js"],
-      use: { ...chromiumUse, baseURL: "http://127.0.0.1:4174" },
-    },
+    { name: 'local', testMatch: 'photo-journal.spec.js', use: chromiumUse },
+    { name: 'configured-guest', testMatch: ['google-auth.spec.js','account-journal.spec.js'], use: {...chromiumUse,baseURL:'http://127.0.0.1:4174'} },
+    ...(process.env.PLAYWRIGHT_WEBKIT ? [
+      {name:'webkit-upload',testMatch:'photo-journal.spec.js',use:{browserName:'webkit',isMobile:true,hasTouch:true}},
+      {name:'webkit-auth',testMatch:['google-auth.spec.js','account-journal.spec.js'],use:{browserName:'webkit',isMobile:true,hasTouch:true,baseURL:'http://127.0.0.1:4174'}}
+    ]:[]),
   ],
   use: {
     baseURL: "http://127.0.0.1:4173",

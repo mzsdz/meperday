@@ -1,3 +1,7 @@
+import { renderRecords, renderManagement, renderWeightPage } from "./journal-view.js";
+import { NUTRIENTS, DEFAULT_MODULES, visibleNutrients } from "./nutrition.js";
+import { openFoodEditor } from "./food-editor.js";
+import { photoForAI } from "./concierge-client.js";
 import { analyzePhoto } from "./analysis-client.js";
 import { bindVoiceInput } from "./voice-input.js";
 import { askConcierge } from "./concierge-client.js";
@@ -287,7 +291,7 @@ import {
         ? "AI 연결 준비 중"
         : kind === "food"
           ? "✦ 사진 AI 분석 · 무료"
-          : "✦ 운동 캡처 분석 · 무료";
+          : kind === "weight" ? "체중계 숫자 읽기" : "✦ 운동 캡처 분석 · 무료";
   }
   fetch("/api/analyze")
     .then((r) => (r.ok ? r.json() : {}))
@@ -516,33 +520,61 @@ import {
         "",
       )}</div><div class="chart-note">기록이 없는 날의 칼로리는 알 수 없어요.</div></div>`;
   }
+  let weightPeriod = "week";
   function render() {
-    const oldThread=$('.concierge-thread'), oldScroll=$('.conversation-scroll'), oldInput=$('#conciergeMessage');
-    const previousChat=oldThread ? {id:oldThread.dataset.captureId,top:oldScroll?.scrollTop||0,nearEnd:!oldScroll||oldScroll.scrollHeight-oldScroll.scrollTop-oldScroll.clientHeight<80,draft:oldInput?.value||"",focused:document.activeElement===oldInput,start:oldInput?.selectionStart,end:oldInput?.selectionEnd} : null;
     voiceInput?.destroy();voiceInput=null;
-    const capture = data.captures.find(c => c.id === activeCaptureId) || null;
-    document.body.classList.remove('brand-home');
+    document.body.classList.remove('brand-home','conversation-view','journal-view');
+    document.body.classList.add('app-view','nutrition-app');
     $('#app').classList.remove('brand-home');
-    document.body.classList.add('app-view');
-    document.body.classList.toggle('journal-view',surface==='mine');
-    document.body.classList.toggle('conversation-view',surface==='home');
-    $("#main").innerHTML = surface === "home"
-      ? renderConcierge({capture:accountPending?null:capture,pending:accountPending,pairPhotos:mealPhotoMembers(data,capture),streamingText:streamingReply&&streamingReply.id===capture?.id?streamingReply.text:"",working:conciergeWorking||photoBatchWorking,batch:data.captures.filter(c=>capture?.batchId && c.batchId===capture.batchId),status:photoBatchStatus,esc,loggedIn:!!store}) : `<div class="period-content ${view}">${view==='day'?renderDay():view==='week'?renderWeek():renderMonth()}</div>`;
-    $("#modeSwitch").hidden = surface !== "mine";
-    document.querySelectorAll("#modeSwitch button").forEach(el=>el.classList.toggle("selected",el.dataset.view===view));
-    $("#homeBtn").classList.toggle("active",surface==="home");
-    $("#myPageBtn").classList.toggle("active",surface==="mine");
-    document.querySelectorAll("#modeSwitch button,.bottom-nav button,#settingsButton").forEach(b=>b.disabled=accountPending);
-    if(surface === "home") {
-      bindConciergeHome();
-      const scroller=$('.conversation-scroll'), input=$('#conciergeMessage');
-      if(scroller) {
-        scroller.scrollTop=previousChat && previousChat.id===capture?.id&&!previousChat.nearEnd ? previousChat.top : scroller.scrollHeight;
-        if(previousChat && (!previousChat.id || previousChat.id===capture?.id) && input && previousChat.draft) input.value=previousChat.draft;
-        if(input) { input.style.height='auto';input.style.height=`${Math.min(108,Math.max(38,input.scrollHeight))}px`; }
-        if(previousChat?.focused && input && !input.disabled) {input.focus({preventScroll:true});input.setSelectionRange(previousChat.start,previousChat.end);}
+    const props={data:accountPending?seed():data,selected,today:TODAY,pending:accountPending||photoBatchWorking,status:photoBatchStatus};
+    $('#main').innerHTML=surface==='manage'?renderManagement(props):surface==='weight'?renderWeightPage({...props,period:weightPeriod}):renderRecords(props);
+    $('#modeSwitch').hidden=true;
+    $('#homeBtn').classList.toggle('active',surface!=='manage'&&surface!=='weight');
+    $('#myPageBtn').classList.toggle('active',surface==='manage');
+    $('#weightPageBtn').classList.toggle('active',surface==='weight');
+    document.querySelectorAll('.bottom-nav button').forEach(b=>b.disabled=false);
+    const date=$('#journalDate'); if(date)date.oninput=date.onchange=()=>{if(date.value&&date.value!==selected){selected=date.value;render();}};
+    const input=$('#journalPhotos');if(input)input.onchange=()=>uploadJournalPhotos(input.files);
+  }
+  async function uploadJournalPhotos(fileList) {
+    const files=Array.from(fileList||[]);if(!files.length||busy||accountPending||photoBatchWorking)return;
+    if(files.length>3){toast('한 번에 최대 3장까지 선택해 주세요.');return;}
+    photoBatchWorking=true;const ids=[],failures=[];
+    try {
+      for(const [i,file] of files.entries()) {
+        photoBatchStatus=`${i+1}/${files.length}장 저장 중…`;render();
+        try {
+          const [photo,tags]=await Promise.all([compressImage(file),exifr.parse(file,{pick:['DateTimeOriginal'],reviveValues:false}).catch(()=>null)]);
+          const date=captureDate(tags),r={id:uid(),date:date||selected,time:captureTime(tags),capturedDate:date,photo,meal:'entry',name:'음식 사진',kcal:null,nutrients:{},pending:true,items:[]};
+          data.records.push(r);
+          if(await save())ids.push(r.id);else failures.push(file.name);
+        }catch(error){failures.push(file.name);toast(error.message);}
       }
+      if(store&&aiReady)for(const [i,id] of ids.entries()) {
+        photoBatchStatus=`사진 보관 완료 · ${i+1}/${ids.length}장 분석 중…`;render();
+        try {const r=data.records.find(r=>r.id===id);const result=await analyzePhoto('meal',await photoForAI(r.photo));
+          // A form opened during analysis must never be overwritten.
+          const current=data.records.find(r=>r.id===id);
+          if(current?.pending){current.suggestedItems=result.items.map(item=>({...item,source:'AI 사진 추정'}));current.analysisNotes=result.notes;await save();}
+        }catch(error){const current=data.records.find(r=>r.id===id);if(current){current.analysisNotes=error.message;await save();}}
+      }
+    }finally{
+      photoBatchWorking=false;photoBatchStatus=`${ids.length}장 보관 완료${failures.length?` · ${failures.length}장 저장 실패. 실패한 사진만 다시 올려 주세요.`:''}`;
+      if(ids.length)selected=data.records.find(r=>r.id===ids[0])?.date||selected;render();
+      if(ids.length&&!overlayOpen)showFoodForm('entry',data.records.find(r=>r.id===ids[0]));
     }
+  }
+  function showNutrientPicker() {
+    showSheet(`${head('관심 영양소 추가','보고 싶은 항목을 골라 내 관리 화면을 만들어요.')}<label class="field">영양소 검색<input id="nutrientSearch" type="search" placeholder="예: 칼슘, 비타민" autocomplete="off"></label><div id="nutrientResults"></div>`);
+    const search=$('#nutrientSearch'),results=$('#nutrientResults');
+    const draw=()=>{const ids=visibleNutrients(data).map(n=>n.id),query=search.value.replace(/\s/g,'').toLowerCase();results.innerHTML=NUTRIENTS.filter(n=>n.label.replace(/\s/g,'').toLowerCase().includes(query)).map(n=>`<button type="button" class="food-result" data-nutrient-add="${n.id}" ${ids.includes(n.id)?'disabled':''}><strong>${n.label}</strong><small>${n.kind==='limit'?'사용량 관리':'하루 기준'} · ${ids.includes(n.id)?'추가됨':'＋ 추가'}</small></button>`).join('')||'<p>검색 결과가 없어요.</p>';};
+    search.oninput=draw;draw();
+    results.onclick=async event=>{const button=event.target.closest('[data-nutrient-add]');if(!button||button.disabled||busy)return;data.dashboard??={};data.dashboard.nutrients=[...visibleNutrients(data).map(n=>n.id),button.dataset.nutrientAdd];if(await save()){render();draw();}};
+  }
+  function showNutrientReference(id) {
+    const n=NUTRIENTS.find(n=>n.id===id);if(!n)return;
+    showSheet(`${head(n.label+' 기준','개인에게 맞는 하루 참고 기준을 설정하세요.')}<form id="referenceForm"><label class="field">${n.unit}<input id="referenceValue" type="number" min="0.01" max="100000" step="any" required value="${data.dashboard?.references?.[id]||n.reference}"></label><p class="disclaimer">기본값 ${n.reference}${n.unit} · 식약처 영양성분 표시 기준</p><button class="button full" type="submit">저장</button></form>`);
+    $('#referenceForm').onsubmit=async event=>{event.preventDefault();const value=Number($('#referenceValue').value);if(!Number.isFinite(value)||value<=0||value>100000)return;data.dashboard??={};data.dashboard.references??={};data.dashboard.references[id]=value;if(await save()){closeSheet();render();}};
   }
   function syncCaptures() {
     data.captures = data.captures.filter(c => !c.recordKind || linkedRecord(data,c));
@@ -850,154 +882,48 @@ import {
       )
       .join("")}</div></details>`;
   }
-  function showFoodForm(meal = "entry", r = null) {
-    const isEdit = !!r;
-    let state = { photo: r?.photo || null, analysis: r?.analysis || null };
-    const time = r?.time || "",
-      date = r?.date || selected;
-    showSheet(
-      `${head(isEdit ? "음식 기록 수정" : "음식 기록하기", "사진 한 장으로 시작하고, 나머지는 자유롭게 채워요.")}<form id="foodForm"><div class="form-grid ${isEdit ? "" : "single-field"}"><div class="field"><label for="foodDate">날짜</label><input id="foodDate" type="date" value="${date}" required /></div>${isEdit ? `<div class="field"><label for="foodTime">식사 시간 · 선택</label><input id="foodTime" type="time" value="${time}" /></div>` : `<input id="foodTime" type="hidden" value="${time}" />`}</div><input id="foodMeal" type="hidden" value="entry"><label class="uploadbox" for="foodFile"><span class="big">📷</span><strong>음식 사진 선택하기</strong><small>사진 한 장만 선택해도 저장할 수 있어요</small><input id="foodFile" type="file" accept="image/*" ></label><div id="photoPreview">${state.photo ? `<img src="${state.photo}" class="upload-preview" alt="추가한 사진">` : ""}</div><button type="button" id="foodAnalyze" hidden class="button secondary full" ${!state.photo ? "disabled" : ""}>✦ 사진 AI 분석</button><p id="analyzeStatus" class="disclaimer" style="margin:7px 0 13px">수치는 직접 수정할 수 있어요. 사진 대화에서도 먹은 양을 설명할 수 있어요.</p><div class="field"><label for="foodName">음식 이름</label><input id="foodName" placeholder="예: 제육볶음, 밥 (사진만 저장해도 돼요)" value="${esc(r?.name || "")}" /></div><div class="field"><label for="foodKcal">먹은 양의 칼로리 · 대략도 괜찮아요</label><input id="foodKcal" type="number" min="0" max="9999" step="1" value="${r?.kcal ?? ""}" placeholder="비워두면 열량 미확인" /></div><div class="field"><label for="foodPortion">먹은 양 · 선택</label><input id="foodPortion" value="${esc(r?.portion || "")}" placeholder="예: 반 공기, 1인분 (수치는 먹은 양 기준)" /></div><details class="field"><summary style="font-size:12px;color:#788d80;cursor:pointer">자주 먹는 음식에서 선택하기 (선택)</summary><div class="choice-row" style="margin-top:9px">${PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${p.name}</button>`).join("")}</div></details>${detailNutrientFields(r)}<details style="margin-bottom:18px"><summary style="color:#798a7b;font-size:12px;cursor:pointer">식당·구매처·메모 등 더 기록하고 싶다면</summary><div class="field"><label for="foodPlace">장소 / 식당명 (선택)</label><input id="foodPlace" value="${esc(r?.place || "")}" placeholder="비워둬도 괜찮아요" /></div><div class="field"><label for="foodPrice">가격 · 선택</label><input id="foodPrice" type="number" min="0" value="${r?.price ?? ""}" /></div><div class="field"><label for="foodNote">내 메모 (선택)</label><textarea id="foodNote" placeholder="기억하고 싶은 말이 있을 때만">${esc(r?.note || "")}</textarea></div></details><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${isEdit ? "수정 저장" : "기록 저장"}</button></div>${isEdit ? '<button type="button" class="text-button" id="deleteFood" style="margin-top:9px;color:#c07165;width:100%">이 음식 기록 삭제</button>' : ""}</form>`,
-    );
-    bindPhotoInput({
-      input: "#foodFile",
-      form: "#foodForm",
-      preview: "#photoPreview",
-      analyze: "#foodAnalyze",
-      time: "#foodTime",
-      state,
-    });
-    const foodAnalysisForm = $("#foodForm");
-    $("#foodAnalyze").addEventListener("click", async () => {
-      if (!state.photo) return;
-      const analyzedPhoto = state.photo;
-      let b = $("#foodAnalyze");
-      state.analyzing = true;
-      b.disabled = true;
-      b.textContent = "사진을 분석하고 있어요…";
-      $("#analyzeStatus").textContent = "사진은 분석을 위해 서버로 전송돼요.";
-      try {
-        const j = await analyzePhoto("food", state.photo);
-        if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
-          return;
-        state.analysis = j;
-        $("#foodName").value = j.name || "";
-        $("#foodKcal").value = j.kcal ?? "";
-        Object.entries(j.nutrients || {}).forEach(([key, val]) => {
-          const el = document.querySelector(`[data-nut="${key}"]`);
-          if (el) el.value = typeof val === "number" ? val : "";
-        });
-        $("#analyzeStatus").textContent =
-          "AI 추정값이에요. 먹은 양에 맞게 수정할 수 있어요. " +
-          (j.notes || "");
-        toast("AI 분석 결과를 가져왔어요.");
-      } catch (e) {
-        if (!foodAnalysisForm.isConnected || state.photo !== analyzedPhoto)
-          return;
-        $("#analyzeStatus").textContent =
-          (e.message || "AI 분석을 사용할 수 없어요.") +
-          " · 아래에서 직접 입력하면 저장할 수 있어요.";
-      } finally {
-        state.analyzing = false;
-        if (foodAnalysisForm.isConnected)
-          updateAnalysisButton(b, state, "food");
+  function showFoodForm(meal = 'entry', r = null) {
+    openFoodEditor({record:r,date:selected,head,showSheet,canAnalyze:()=>!!store&&aiReady,records:data.records,
+      onSave:async record=>{
+        record.id??=uid();
+        if(data.records.some(x=>x.id===record.id))data.records=data.records.map(x=>x.id===record.id?record:x);else data.records.push(record);
+        const capture=data.captures.find(c=>c.id===record.id);if(capture)capture.recordKind='food';
+        if(!(await save()))return false;
+        selected=record.date;surface='home';closeSheet();render();toast('식사를 저장했어요.');return true;
+      },
+      onDelete:async record=>{
+        if(!confirm('이 음식 기록을 삭제할까요?'))return;
+        const c=data.captures.find(c=>c.id===record.id);if(c)removeConversation(data,c);
+        else data.records=data.records.filter(x=>x.id!==record.id);
+        if(await save()){closeSheet();render();toast('삭제했어요.');}
       }
     });
-    document.querySelectorAll("[data-preset]").forEach((b) =>
-      b.addEventListener("click", async () => {
-        let p = PRESETS[Number(b.dataset.preset)];
-        $("#foodName").value = p.name;
-        $("#foodKcal").value = p.kcal;
-        document
-          .querySelectorAll("[data-nut]")
-          .forEach((el) => (el.value = p.nutrients[el.dataset.nut] ?? ""));
-        toast("선택한 음식의 참고값을 넣었어. 양에 맞게 수정해줘.");
-      }),
-    );
-    $("#foodForm").onsubmit = async (e) => {
-      e.preventDefault();
-      if (state.processing) {
-        toast("사진 처리가 끝난 뒤 저장해 주세요.");
-        return;
-      }
-      let name = $("#foodName").value.trim() || "음식 사진 (분석 전)",
-        kcal =
-          $("#foodKcal").value.trim() === ""
-            ? null
-            : Number($("#foodKcal").value);
-      if (!state.photo && kcal === null && !$("#foodName").value.trim()) {
-        toast("사진 또는 음식 이름을 기록해 주세요.");
-        return;
-      }
-      if (kcal !== null && (!Number.isFinite(kcal) || kcal < 0)) {
-        toast("칼로리 값을 확인해줘.");
-        return;
-      }
-      let nutrients = {};
-      document.querySelectorAll("[data-nut]").forEach((el) => {
-        if (el.value.trim() !== "") {
-          let val = Number(el.value);
-          if (Number.isFinite(val) && val >= 0) nutrients[el.dataset.nut] = val;
-        }
-      });
-      let obj = {
-        id: r?.id || uid(),
-        date: $("#foodDate").value,
-        time: $("#foodTime").value,
-        meal: $("#foodMeal").value,
-        name,
-        kcal,
-        nutrients,
-        photo: state.photo,
-        photoPath: r?.photoPath,
-        analysis: state.analysis,
-        emoji: r?.emoji || "🍽️",
-        source: state.analysis
-          ? "AI 추정 + 사용자 확인"
-          : kcal === null
-            ? "사진만 기록 · 분석 전"
-            : "직접 기록",
-        portion: $("#foodPortion").value.trim(),
-        price:
-          $("#foodPrice").value === "" ? null : Number($("#foodPrice").value),
-        place: $("#foodPlace")?.value.trim() || "",
-        note: $("#foodNote")?.value.trim() || "",
-        sample: false,
-      };
-      if (r) data.records = data.records.map((z) => (z.id === r.id ? obj : z));
-      else data.records.push(obj);
-      selected = obj.date;
-      if (!(await save())) return;
-      closeSheet();
-      surface = "mine";
-      view = "day";
-      render();
-      toast("식사를 기록했어 ✓");
-    };
-    if (r)
-      $("#deleteFood").onclick = async () => {
-        if (!confirm("이 음식 기록을 삭제할까?")) return;
-        data.records = data.records.filter((z) => z.id !== r.id);
-        if (!(await save())) return;
-        closeSheet();
-        render();
-        toast("음식 기록을 삭제했어");
-      };
   }
   function showWeightForm(r = null) {
     const state = { photo: r?.photo || "", processing: false };
     showSheet(
-      `${head(r ? "몸무게 인증 수정" : "몸무게 인증", "체중계 사진 한 장이면 완료예요. 몸무게 수치는 원할 때만 적어요.")}<form id="weightForm"><div class="form-grid ${r ? "" : "single-field"}"><div class="field"><label for="weightDate">날짜</label><input id="weightDate" type="date" required value="${esc(r?.date || selected)}"></div>${r ? `<div class="field"><label for="weightTime">촬영 시각 · 선택</label><input id="weightTime" type="time" value="${esc(r.time || "")}"></div>` : '<input id="weightTime" type="hidden" value="">'}</div><label class="uploadbox" for="weightFile"><span class="big">⚖️</span><strong>체중계 사진 선택하기</strong><small>다른 사람에게 공개되지 않아요</small><input id="weightFile" type="file" accept="image/*"></label><div id="weightPhotoPreview">${state.photo ? `<img class="upload-preview" src="${esc(state.photo)}" alt="몸무게 인증 사진">` : ""}</div><div class="field"><label for="weightKg">몸무게 (kg) · 선택</label><input id="weightKg" type="number" min="0.1" max="1000" step="any" inputmode="decimal" value="${r?.kg ?? ""}" placeholder="사진만 저장해도 돼요"></div><div class="field"><label for="weightNote">메모 · 선택</label><textarea id="weightNote" placeholder="원할 때만 남겨요">${esc(r?.note || "")}</textarea></div><p id="weightStatus" class="disclaimer" role="status">사진을 보관하는 인증 기록이에요. 사진에서 몸무게를 추측하거나 검증하지 않아요.</p><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${r ? "수정 저장" : "인증 저장"}</button></div>${r ? '<button type="button" class="text-button full" id="deleteWeight">이 인증 기록 삭제</button>' : ""}</form>`,
+      `${head(r ? "몸무게 인증 수정" : "몸무게 인증", "체중계 사진 한 장이면 완료예요. 몸무게 수치는 원할 때만 적어요.")}<form id="weightForm"><div class="form-grid ${r ? "" : "single-field"}"><div class="field"><label for="weightDate">날짜</label><input id="weightDate" type="date" required value="${esc(r?.date || selected)}"></div>${r ? `<div class="field"><label for="weightTime">촬영 시각 · 선택</label><input id="weightTime" type="time" value="${esc(r.time || "")}"></div>` : '<input id="weightTime" type="hidden" value="">'}</div><label class="uploadbox" for="weightFile"><span class="big">⚖️</span><strong>체중계 사진 선택하기</strong><small>다른 사람에게 공개되지 않아요</small><input id="weightFile" type="file" accept="image/*"></label><div id="weightPhotoPreview">${state.photo ? `<img class="upload-preview" src="${esc(state.photo)}" alt="몸무게 인증 사진">` : ""}</div><button type="button" class="button secondary full" id="weightAnalyze">체중계 숫자 읽기</button><div class="field"><label for="weightKg">사진에서 읽은 몸무게 (kg) · 확인·수정</label><input id="weightKg" type="number" min="0.1" max="1000" step="any" inputmode="decimal" value="${r?.kg ?? ""}" placeholder="사진만 저장해도 돼요"></div><div class="field"><label for="weightNote">메모 · 선택</label><textarea id="weightNote" placeholder="원할 때만 남겨요">${esc(r?.note || "")}</textarea></div><p id="weightStatus" class="disclaimer" role="status">사진의 숫자를 읽어 제안해요. 읽지 못한 값은 비워 둡니다.</p><div class="inline-actions"><button type="button" class="button secondary" data-close>취소</button><button type="submit" class="button">${r ? "수정 저장" : "인증 저장"}</button></div>${r ? '<button type="button" class="text-button full" id="deleteWeight">이 인증 기록 삭제</button>' : ""}</form>`,
     );
     bindPhotoInput({
       input: "#weightFile",
+      analyze: "#weightAnalyze",
       form: "#weightForm",
       preview: "#weightPhotoPreview",
       time: "#weightTime",
       state,
     });
+    const weightForm=$('#weightForm');
+    $('#weightAnalyze').onclick=async()=>{
+      if(state.processing||state.analyzing||!state.photo||!store)return;
+      const photo=state.photo;state.analyzing=true;$('#weightAnalyze').disabled=true;weightForm.querySelector('[type="submit"]').disabled=true;
+      $('#weightStatus').textContent='체중계 숫자를 읽고 있어요…';
+      try{const result=await analyzePhoto('weight',await photoForAI(photo));if(!weightForm.isConnected||state.photo!==photo)return;$('#weightKg').value=result.kg??'';$('#weightStatus').textContent=result.kg==null?'숫자를 읽지 못했어요. 사진을 확인하고 직접 수정할 수 있어요.':`읽은 값 ${result.kg}kg · 확인 후 저장해 주세요. ${result.notes||''}`;}
+      catch(error){if(weightForm.isConnected)$('#weightStatus').textContent=error.message;}
+      finally{state.analyzing=false;if(weightForm.isConnected){updateAnalysisButton($('#weightAnalyze'),state,'weight');weightForm.querySelector('[type="submit"]').disabled=false;}}
+    };
     $("#weightForm").onsubmit = async (e) => {
       e.preventDefault();
-      if (state.processing) return;
+      if (state.processing || state.analyzing) return;
       if (!state.photo) {
         $("#weightStatus").textContent =
           "체중계 사진 한 장을 선택해 주세요. 몸무게 수치는 비워 두어도 돼요.";
@@ -1023,7 +949,7 @@ import {
       if (!(await save())) return;
       selected = record.date;
       closeSheet();
-      surface = "mine";
+      surface = "weight";
       view = "day";
       render();
       toast("몸무게 인증을 저장했어요.");
@@ -1050,7 +976,7 @@ import {
     message.className = "disclaimer";
     message.setAttribute("role", "status");
     target.after(message);
-    const kind = form === "#foodForm" ? "food" : "exercise";
+    const kind = form === "#foodForm" ? "food" : form === "#weightForm" ? "weight" : "exercise";
     const refresh = () => {
       if (formEl.isConnected && analyzeButton)
         updateAnalysisButton(analyzeButton, state, kind);
@@ -1082,6 +1008,8 @@ import {
         state.photo = photo;
         state.analysis = null;
         if (timeField) timeField.value = captureTime(tags);
+        const dateField=formEl.querySelector('input[type="date"]');if(dateField)dateField.value=captureDate(tags)||selected;
+        if(kind==='weight')$('#weightKg').value='';
         target.innerHTML = `<img src="${photo}" class="upload-preview" alt="선택한 사진">`;
         message.textContent =
           "사진 준비 완료 · 다른 정보는 비워 두어도 저장할 수 있어요.";
@@ -1096,6 +1024,7 @@ import {
             submit.disabled = false;
             refresh();
             picker.value = "";
+            if(kind==='weight' && state.photo && store && aiReady)analyzeButton?.click();
           }
         }
       }
@@ -1142,7 +1071,7 @@ import {
   function showExerciseForm(r = null) {
     let state = { photo: r?.photo || null };
     showSheet(
-      `${head(r ? "운동 수정" : "운동 기록", "운동 앱 화면 캡처만 올려도 괜찮아요.")}<form id="exerciseForm"><div class="form-grid"><div class="field"><label>날짜</label><input id="exDate" type="date" value="${r?.date || selected}" required /></div><div class="field"><label>기록 시각</label><input id="exTime" type="time" value="${r?.time || ""}" /></div></div><label class="uploadbox" for="exFile"><span class="big">🏃</span><strong>운동 앱 캡처 선택</strong><small>AI 분석은 서버를 연결했을 때 사용 가능</small><input id="exFile" type="file" accept="image/*"></label><div id="exPhotoPreview">${state.photo ? `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">` : ""}</div><button type="button" class="button secondary full" id="exAnalyze" hidden ${!state.photo ? "disabled" : ""}>✦ 캡처에서 운동 정보 추출</button><p class="disclaimer" id="exStatus">운동 종류, 시간, 소모 열량은 직접 입력해도 돼요.</p><div class="field"><label>운동 종류</label><input id="exType" value="${esc(r?.type || "")}" placeholder="예: 걷기, 홈트, 골프 연습 (선택)" /></div><div class="form-grid"><div class="field"><label>운동 시간 (분)</label><input id="exMinutes" type="number" min="0" value="${r?.minutes ?? ""}" placeholder="선택" /></div><div class="field"><label>소모 열량 (kcal)</label><input id="exCalories" type="number" min="0" value="${r?.calories ?? ""}" placeholder="선택" /></div></div><div class="inline-actions"><button type="button" data-close class="button secondary">취소</button><button type="submit" class="button">저장</button></div>${r ? '<button type="button" class="text-button" id="deleteExercise" style="margin-top:9px;color:#c07165;width:100%">운동 기록 삭제</button>' : ""}</form>`,
+      `${head(r ? "운동 수정" : "운동 기록", "운동 앱 화면 캡처만 올려도 괜찮아요.")}<form id="exerciseForm"><div class="form-grid"><div class="field"><label>날짜</label><input id="exDate" type="date" value="${r?.date || selected}" required /></div><div class="field"><label>기록 시각</label><input id="exTime" type="time" value="${r?.time || ""}" /></div></div><label class="uploadbox" for="exFile"><span class="big">🏃</span><strong>운동 앱 캡처 선택</strong><small>운동 시간과 소모 열량을 읽을 수 있어요</small><input id="exFile" type="file" accept="image/*"></label><div id="exPhotoPreview">${state.photo ? `<img class="upload-preview" src="${state.photo}" alt="운동 캡처">` : ""}</div><button type="button" class="button secondary full" id="exAnalyze" ${!state.photo ? "disabled" : ""}>✦ 캡처에서 운동 정보 추출</button><p class="disclaimer" id="exStatus">운동 종류, 시간, 소모 열량은 직접 입력해도 돼요.</p><div class="field"><label>운동 종류</label><input id="exType" value="${esc(r?.type || "")}" placeholder="예: 걷기, 홈트, 골프 연습 (선택)" /></div><div class="form-grid"><div class="field"><label>운동 시간 (분)</label><input id="exMinutes" type="number" min="0" value="${r?.minutes ?? ""}" placeholder="선택" /></div><div class="field"><label>소모 열량 (kcal)</label><input id="exCalories" type="number" min="0" value="${r?.calories ?? ""}" placeholder="선택" /></div></div><div class="inline-actions"><button type="button" data-close class="button secondary">취소</button><button type="submit" class="button">저장</button></div>${r ? '<button type="button" class="text-button" id="deleteExercise" style="margin-top:9px;color:#c07165;width:100%">운동 기록 삭제</button>' : ""}</form>`,
     );
     bindPhotoInput({
       input: "#exFile",
@@ -1360,7 +1289,7 @@ import {
   }
   function showSettings() {
     showSheet(
-      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<button type="button" class="button secondary full" data-open-journal>내 기록 보기</button><button type="button" class="button secondary full" data-profile>내 정보 · 칼로리 비교 기준</button><h3>영양소 기준량</h3><p class="disclaimer">아래 수치는 앱 화면을 위한 임시 기준이야. 의료·영양 전문가가 정한 나의 개인 처방이 아니야. 나이·성별·건강 상태에 따라 조정이 필요할 수 있어.</p><form id="goalForm"><div class="form-grid">${[...NUTS, ...WARN].map(([k, l, u]) => `<div class="field"><label>${l} (${u})${["sodium", "satFat"].includes(k) ? " · 상한" : ""}</label><input type="number" min="1" max="99999" step="any" data-goal="${k}" value="${data.goals[k]}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
+      `${head("설정", "입력은 최소한으로, 내가 원할 때만 자세하게.")}<button type="button" class="button secondary full" data-open-journal>내 기록 보기</button><button type="button" class="button secondary full" data-profile>내 정보</button><h3>영양소 기준량</h3><p class="disclaimer">식약처 영양표시 기준을 참고한 값이에요. 관리 화면의 각 모듈과 같은 기준을 사용합니다. 개인별 기준은 변경할 수 있어요.</p><form id="goalForm"><div class="form-grid">${NUTRIENTS.map(n => `<div class="field"><label>${n.label} (${n.unit})${n.kind==='limit'?' · 관리 기준':''}</label><input type="number" min="0.01" max="100000" step="any" data-goal="${n.id}" value="${data.dashboard?.references?.[n.id]||n.reference}" required /></div>`).join("")}</div><button class="button full" type="submit">기준량 저장</button></form><hr class="sep"><h3>내 데이터</h3><p class="disclaimer">${store ? "로그인한 계정의 비공개 서버 저장소에 보관됩니다." : "이 기기에 저장됩니다. 브라우저 데이터를 지우면 기록이 사라질 수 있어요. 다른 기기에서도 보려면 로그인해 주세요."}</p><div class="inline-actions"><button class="button secondary" id="exportData">내보내기</button><label class="button secondary" style="text-align:center;cursor:pointer">불러오기<input type="file" id="importData" accept="application/json,.json" hidden></label></div>${store ? '<button type="button" class="button secondary full" id="signOut">로그아웃</button>' : cloud ? '<button type="button" class="button secondary full" id="signIn">로그인해 계정에 보관하기</button>' : ""}`,
     );
     let device = null;
     try {
@@ -1400,7 +1329,7 @@ import {
       e.preventDefault();
       document
         .querySelectorAll("[data-goal]")
-        .forEach((el) => (data.goals[el.dataset.goal] = Number(el.value)));
+        .forEach((el) => { data.dashboard??={};data.dashboard.references??={};data.dashboard.references[el.dataset.goal]=Number(el.value);data.goals[el.dataset.goal]=Number(el.value); });
       if (!(await save())) return;
       closeSheet();
       render();
@@ -1481,6 +1410,18 @@ import {
   document.addEventListener("click", (e) => {
     const button = e.target.closest("button,[data-close]");
     if (!button || busy) return;
+    if (button.id==='homeBtn'||button.id==='myPageBtn'||button.id==='weightPageBtn'||button.hasAttribute('data-open-journal')) {
+      surface=button.id==='myPageBtn'?'manage':button.id==='weightPageBtn'?'weight':'home';closeSheet();render();window.scrollTo(0,0);return;
+    }
+    if(button.dataset.editCapture){
+      if(accountPending)return;const c=data.captures.find(c=>c.id===button.dataset.editCapture);if(!c)return;
+      showSheet(`${head('사진 기록 확인','이전에 보관한 원본 사진이에요.')}<img class="upload-preview" src="${esc(c.photo)}" alt="보관한 사진"><div class="choice-row"><button type="button" class="chip" data-legacy-kind="food" data-capture-id="${esc(c.id)}">음식</button><button type="button" class="chip" data-legacy-kind="weight" data-capture-id="${esc(c.id)}">몸무게</button><button type="button" class="chip" data-legacy-kind="exercise" data-capture-id="${esc(c.id)}">운동</button></div>`);return;
+    }
+    if(button.dataset.legacyKind){const c=data.captures.find(c=>c.id===button.dataset.captureId);if(!c)return;manualCapture(data,c,button.dataset.legacyKind);void save().then(ok=>{if(!ok)return;const r=linkedRecord(data,c);if(c.recordKind==='food')showFoodForm('entry',r);else if(c.recordKind==='weight')showWeightForm(r);else showExerciseForm(r);render();});return;}
+    if(button.dataset.weightPeriod){weightPeriod=button.dataset.weightPeriod;render();return;}
+    if(button.id==='addNutrient'){if(!accountPending)showNutrientPicker();return;}
+    if(button.dataset.reference){if(!accountPending)showNutrientReference(button.dataset.reference);return;}
+    if(button.dataset.removeModule){if(accountPending)return;data.dashboard??={};data.dashboard.nutrients=visibleNutrients(data).map(n=>n.id).filter(id=>id!==button.dataset.removeModule);void save().then(ok=>{if(ok)render();});return;}
     if (button.id === "signIn") {
       showLogin();
       return;

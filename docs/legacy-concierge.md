@@ -1,0 +1,97 @@
+# 이전 대화형 UI 기록 (현재 UI에 적용되지 않음)
+
+# me/day — Me Per Day
+
+사진 한 장이면 기록 완료. 기존 식사·운동·몸무게 기록과 비공개 계정 저장을 유지하면서, 사진과 대화로 기록을 정리하는 앱입니다.
+
+## 연결 대상
+
+- GitHub: https://github.com/mzsdz/meperday
+- Vercel: 기존 mzsdz/meperday (`prj_N34shwrwrBmVLJ5hbuw8Wm86jVTb`)
+- Supabase: 기존 `xbclkxeexrhdqhxafuad`
+
+새 클라우드 프로젝트를 만들지 않습니다.
+
+## 사용 흐름
+
+첫 화면은 사진 등록 버튼입니다. 사진을 먼저 저장하고, 로그인 상태에서 AI가 음식·운동 캡처 등을 분류하여 무엇을 읽고 어떤 양으로 추정했는지 대화로 설명합니다. `사진 속 음식을 두 그릇 먹었어` 같은 설명을 보내면 같은 기록을 보정합니다. 질문만 보내면 열량을 변경하지 않습니다. 기다리는 동안 직접 수정·삭제한 기록을 늦게 온 답변이 덮어쓰지 않습니다.
+
+사진만으로 정상적인 완료 기록입니다. 게스트·AI 연결 장애·한도 초과에도 사진이 남으며, 직접 음식/운동/몸무게로 분류하고 수정할 수 있습니다. 식당·가격·메모·평가·몸무게 수치는 선택입니다. 신규 식사는 아침·점심·저녁 구분을 요구하지 않으며, 기존 구분이 들어 있는 기록도 보존합니다.
+
+내 페이지는 일간/주간/월간과 시간순 기록을 보여줍니다. 원본 EXIF 촬영 시각이 없으면 시간 미입력으로 남깁니다. 업로드 시각으로 대체하지 않습니다. 운동 앱의 운동 시간·소모 열량만 추출하고 하루 총소모를 운동 값으로 바꾸지 않습니다. 미확인 수치는 0 대신 미확인으로 표시합니다.
+
+## 개발과 검증
+
+Node.js 22.12 이상(배포는 24). `npm ci`, `.env.example`을 참고해 로컬 공개 Supabase URL/키를 설정합니다.
+
+```
+npm run dev
+npm test
+npm run test:e2e
+npm run build
+```
+
+E2E는 생산용 빌드를 Supabase 미설정/설정 환경으로 나누어 검사합니다. 로컬 Chromium은 Edge, Linux CI는 설치된 Chrome입니다. Windows에서 WebKit을 설치하고 `PLAYWRIGHT_WEBKIT=1`로 모바일 Safari 계열 엔진도 검사합니다. 320/393/430px 사진 등록, 대화 재조회, 수동 분류, 개인 소비량 기준, 기존 음식·운동·몸무게 CRUD/백업, 로그인 오류 복구를 검증합니다. 실제 iPhone OS 사진 선택창·가상 키보드·Google 계정의 인증 화면·이메일 수신은 별도 기기 확인 범위입니다.
+
+`scripts/verify-concierge.mjs`는 명시적으로 제공한 테스트 관리자 키와 공개 설정을 사용해 임시 QA 계정으로 진짜 로그인 콜백→사진 업로드→실제 AI 보정→질문 시 수치 유지→서버 재조회→운동 OCR→직접 수정·삭제를 확인합니다. 사용자와 사진은 정리합니다. 비밀 키는 브라우저나 저장소에 넣지 않습니다. `VERIFY_BROWSER_URL`은 검사할 앱 주소입니다. `VERIFY_LOCAL_HANDLER=1`은 로컬 :4180에서 빌드된 앱과 실제 AI 핸들러를 실행합니다. 기존 `verify-live.mjs`, `verify-ai.mjs`, `verify-points.mjs`, `tests/points-db.sql`은 이전 UI/보상 정책의 참고용 스크립트이며 현재 릴리스 검증에는 사용하지 않습니다.
+
+## 비공개 저장과 로그인
+
+환경변수가 없으면 로컬 모드로 브라우저에 저장합니다. 운영 앱도 로그인 없이 기기 기록이 가능합니다. Google/이메일 로그인은 선택이며, 로그인한 계정의 서버 조회·저장 실패를 로컬 저장 성공으로 바꾸지 않습니다. 기기 기록은 로그인 후 설정에서 명시적으로 가져옵니다. 브라우저 데이터를 지우기 전 JSON 백업을 권장합니다.
+
+`meday_journals`는 사용자별 기록·대화·선택 프로필·영양 기준량 JSON과 revision을 저장합니다. 사용자 기본키와 RLS가 다른 계정의 접근을 차단하며 조건부 revision 갱신으로 다른 기기의 변경을 덮어쓰지 않습니다. 충돌하면 새로고침 후 저장해야 합니다. 기존 백업에는 없는 `weights`, `captures`는 빈 배열로 처리합니다.
+
+사진은 비공개 `meday-photos` 버킷의 `user-id/sha256.jpg`에 저장하고 DB에는 경로만 둡니다. 1시간 서명 URL로 조회하며 유휴 상태에서 갱신합니다. 기록과 연결된 대화는 같은 ID를 사용하고 중복 음식 기록을 만들지 않습니다. 기록 삭제 시 연결된 대화도 삭제합니다. 참조가 사라진 저장소 사진은 동시 업로드를 보호하기 위해 자동 삭제하지 않으며 별도의 정리 정책은 후속 작업입니다. 백업은 서명 URL 대신 사진 데이터를 포함합니다.
+
+Google Cloud OAuth 원본은 `https://meperday.vercel.app`, 콜백은 `https://xbclkxeexrhdqhxafuad.supabase.co/auth/v1/callback`입니다. Client ID/Secret은 Supabase 제공자 설정에만 저장합니다. Supabase Auth 허용 URL에 운영/개발 주소가 필요합니다. 인앱 브라우저에서 Google이 제한하면 Safari/Chrome에서 열어야 할 수 있습니다. 실제 이메일 전달은 SMTP/제공자 설정을 따릅니다.
+
+## AI 대화
+
+`api/concierge.js`와 기존 `api/analyze.js`는 AI SDK 구조화 응답, Vercel AI Gateway, 기존 프로젝트 OIDC를 사용합니다. 운영 및 기본 모델은 `openai/gpt-4o-mini`입니다. `AI_GATEWAY_MODEL`로 서버에서 변경할 수 있습니다. 사진과 대화는 로그인한 사용자가 사진을 등록하거나 설명을 보낼 때 AI에 전달됩니다. 첫 사진은 저장 직후 자동 분석합니다. 게스트는 AI를 호출하지 않습니다.
+
+AI는 무료이며 포인트를 차감하지 않습니다. 인증 검증 후 기존 비공개 사용량 RPC로 계정별 한국 날짜 하루 20회(초기 분석과 후속 대화 합산)를 제한합니다. 실패 요청도 한도에 포함됩니다. 설정 없음·인증 만료·크레딧 부족·한도 초과를 정직하게 안내하고 가짜 결과를 만들지 않습니다.
+
+열량·영양소는 추정입니다. 불확실한 영양소는 null, 나트륨·포화지방은 목표 섭취가 아닌 별도 상한입니다. 모든 화면이 같은 영양소 기준량을 사용합니다. 체중계 사진만으로 kg를 추측하지 않고 사용자가 직접 쓴 수치만 반영합니다. 메뉴 3개 추천은 현재 영양소·반복 음식·최근 기록·평가를 이용한 기존 규칙 기반이며 자동 섭취 기록을 만들지 않습니다.
+
+## 선택적인 칼로리 비교
+
+나이·계산용 성별·키·몸무게로 Mifflin–St Jeor 휴식대사량을 추정하고, 선택한 활동계수로 하루 유지 소비량을 표시합니다. 만 19세 이상 참고값이며 임신·수유에는 적용하지 않습니다. 필수 입력이 없으면 자동 추정하지 않습니다. 직접 기준 입력 또는 비교 숨기기도 가능합니다. 휴식대사량 자체를 섭취 목표로 표현하지 않으며, 활동량이 포함된 소비량에 운동 캡처 kcal를 다시 더하거나 섭취 칼로리에서 빼지 않습니다.
+
+- 원식: https://pubmed.ncbi.nlm.nih.gov/2305711/
+- 신체 정보와 활동량을 함께 고려하는 이유/적용 범위: https://www.niddk.nih.gov/bwp
+
+개인 프로필은 계정의 비공개 저널에 저장하며 언제든 지울 수 있습니다. 진단·감량 처방 기능은 없습니다.
+
+## 포인트 일시 중단
+
+포인트 UI와 새 적립을 중단합니다. `20261029154831_pause_record_points.sql`은 기존 적립 트리거만 비활성화하며 잔액·원장·중복 방지 이력을 삭제하지 않습니다. 과거 마이그레이션을 수정하지 않습니다. `tests/points-paused-db.sql`은 기존 잔액 보존, 신규 기록 보상 중단, 원장 직접 쓰기 차단을 롤백 트랜잭션으로 검사합니다. AI 무료 정책은 유지합니다.
+
+## 공유 미리보기
+
+공개 HTML에 canonical/Open Graph/Twitter 메타데이터와 1200×630 `public/social.png`를 유지합니다. 개인 사진·대화·프로필은 공유 이미지에 포함하지 않습니다. Vercel Preview의 기존 보호는 유지하며 운영 도메인은 Vercel 로그인 없이 접속합니다.
+
+## 사진 최대 3장과 촬영일 배치
+
+사진 등록은 한 번에 1~3장을 선택합니다. 각 사진은 먼저 개별 보관하며, 함께 올린 사진 사이를 이동할 수 있습니다. 같은 식사의 식전·식후로 명확히 확인되는 두 사진은 사진·대화를 함께 유지하고 실제 섭취량 기록 한 건으로 묶습니다. 관계가 불명확하거나 촬영일이 다르면 합치지 않습니다. 4장 이상이면 전체 선택을 거절하고 다시 선택하도록 안내하며 몰래 잘라 저장하지 않습니다. 압축·저장은 한 장씩 진행하고 모든 사진을 먼저 보관한 뒤 로그인한 계정의 AI 분석을 순서대로 실행합니다. 사진 하나의 읽기·저장·AI 실패가 이미 저장된 다른 사진을 취소하지 않습니다. 실패 파일을 안내하며 해당 사진만 다시 선택할 수 있습니다.
+
+원본의 EXIF DateTimeOriginal에서 촬영 날짜와 시간을 읽습니다. 날짜는 시간대 변환 없이 원본 달력 날짜로 기록하며 과거 식사도 해당 날짜에 들어갑니다. EXIF 날짜가 없거나 유효하지 않으면 capturedDate=null로 남기고 오늘 목록에 보관했다는 안내를 표시합니다. 촬영 시각을 업로드 시각으로 채우지 않습니다. GPS는 수집하지 않습니다. 기존 기록의 날짜를 소급 변경하지 않습니다.
+
+채팅은 사진 속 음식 식별·재료·섭취량 보정에만 사용합니다. 사진에 없는 별도 음식/운동 추가 요청에는 수치를 바꾸지 않고 추가 사진을 안내합니다. `scripts/verify-photo-batch.mjs`는 실제 AI와 기존 Supabase의 임시 계정으로 3장 저장, EXIF 과거 날짜, 개별 AI 응답/사진 재조회, 사진 없는 추가 요청 거절, 로그아웃·로그인 후 재조회를 확인하고 QA 계정/사진을 정리합니다. 로컬에서는 허용된 VERIFY_BROWSER_URL 주소와 VERIFY_LOCAL_HANDLER=1로 빌드된 앱과 실제 핸들러를 실행할 수 있습니다.
+
+
+## 식사 전·후와 남긴 양
+
+AI는 함께 올린 최대 3장 중 현재 사진과 관련 사진을 함께 봅니다. 같은 식전·식후 쌍이면 처음 제공된 양에서 남긴 양을 제외한 kcal·영양소만 식전 사진의 기록 ID에 저장합니다. 서버에서도 식전 추정치와 남김 추정치를 분리해 차감을 검증하며, 원본 촬영 시각이 있는 경우 순서가 뒤집힌 결과는 거절합니다. 남긴 사진은 그 기록을 참조하여 중복 합산하지 않으며, 원본 사진과 촬영일·시각은 각각 보존합니다. 대화·직접 수정은 같은 식사에 반영되고 식사 삭제는 연결된 두 사진/대화를 함께 삭제합니다. 기존에 독립 기록으로 잡힌 묶음도 대화의 `남긴 음식 사진도 함께 반영`으로 재검토할 수 있습니다. 새 입력 없는 질문에서 남긴 양을 다시 빼지 않습니다. 잘못 묶인 쌍은 `다른 식사로 분리`로 되돌릴 수 있으며, 먼저 두 사진을 독립된 미확인 기록으로 보관한 뒤 AI를 사용할 수 있으면 각각 재분석합니다.
+
+`scripts/verify-leftovers.mjs`는 임시 계정과 실제 모델을 사용하여 자동 전후 비교, 한 건 저장, 재조회, 수정/삭제, 기존 중복 기록 복구를 검사하고 테스트 계정/사진을 정리합니다. `e2e/fixtures/meal-before.png`, `meal-after.png`는 `scripts/create-meal-photo-fixtures.mjs`로 만든 통제된 식사 도식이며 실제 음식의 칼로리 정답 자료가 아닙니다. 사진 관계의 추정은 불확실할 수 있으며 사용자의 추가 설명으로 보정할 수 있습니다. 관련 사진 때문에 결과 구조가 모순되면 한 번만 재분석하며, 추가 모델 호출도 하루 AI 한도에 포함합니다. 기존의 확정된 식전후 쌍을 무시하고 남긴 사진만 별도 섭취로 계산하는 재시도는 하지 않습니다.
+
+
+## 대화 음성 입력
+
+대화 입력창의 마이크는 브라우저의 SpeechRecognition / webkitSpeechRecognition으로 한국어를 받아씁니다. 브라우저가 제공하는 음성 인식 서비스를 사용하며, me/day 서버에 음성 파일을 업로드하거나 보관하지 않습니다. 말한 내용은 글자로 먼저 입력하고 사용자가 전송해야만 사진 대화에 반영됩니다. 기존 입력을 보존하고 중간 인식 결과를 중복 추가하지 않습니다. 직접 타이핑하거나 다른 화면으로 이동하면 인식을 중지하고 늦은 결과를 무시합니다.
+
+지원 여부와 권한은 브라우저에 따라 다릅니다. 미지원 또는 권한 거부 시 기존 입력을 유지하고 Safari/키보드 받아쓰기를 안내합니다. Safari에서는 Siri·받아쓰기 설정이 필요할 수 있습니다. 자동 검증은 음성 인식 이벤트를 통제하여 입력/중지/오류/화면 전환을 검사하며, 실제 iPhone 마이크·시스템 권한 창·음성 인식 정확도는 실기기 확인 범위입니다.
+
+The app opens directly into the photo conversation, including a `+` photo attachment button and microphone. The chat shell and draft are available while the account loads in the background. Upload, send, and account-record navigation wait for account resolution; a failed account load never falls back to saving into the guest journal. Draft text survives the transition into loaded account records. Text alone does not create a photo record.
+
+Every fresh visit or page reload starts with an empty photo chat. Existing device and account photos/messages are retained in My Records and are opened only by selecting a record; account hydration does not automatically select the latest capture.

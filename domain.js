@@ -1,3 +1,4 @@
+import { NUTRIENTS, PORTIONS } from './nutrition.js';
 export function captureDate(tags) {
   const text=tags?.DateTimeOriginal;
   if(typeof text !== 'string')return null;
@@ -93,5 +94,19 @@ export function validateJournal(value) {
   for (const goal of Object.values(value.goals))
     if (typeof goal !== "number" || !Number.isFinite(goal) || goal <= 0)
       throw Error("기준량을 확인해 주세요.");
+  if(value.dashboard) {
+    if(typeof value.dashboard!=='object'||Array.isArray(value.dashboard))throw Error('관리 화면 설정을 확인해 주세요.');
+    if(value.dashboard.nutrients && (!Array.isArray(value.dashboard.nutrients)||value.dashboard.nutrients.some(id=>!NUTRIENTS.some(n=>n.id===id))))throw Error('영양소 설정을 확인해 주세요.');
+    if(Object.values(value.dashboard.references||{}).some(v=>typeof v!=='number'||!Number.isFinite(v)||v<=0||v>100000))throw Error('기준량을 확인해 주세요.');
+  }
+  for(const record of value.records)for(const field of ['items','suggestedItems'])if(record[field]!==undefined) {
+    if(!Array.isArray(record[field])||record[field].length>100)throw Error('음식 목록을 확인해 주세요.');
+    for(const item of record[field]) {
+      if(!item||typeof item.name!=='string'||item.name.length>200)throw Error('음식 이름을 확인해 주세요.');
+      for(const key of ['kcal','grams','biteGrams'])if(item[key]!=null&&(typeof item[key]!=='number'||!Number.isFinite(item[key])||item[key]<0||item[key]>100000))throw Error('음식 기준량을 확인해 주세요.');
+      if(item.portion&&!PORTIONS.some(p=>p[0]===item.portion))throw Error('먹은 양을 확인해 주세요.');
+      if(Object.values(item.nutrients||{}).some(v=>v!=null&&(typeof v!=='number'||!Number.isFinite(v)||v<0)))throw Error('음식 영양정보를 확인해 주세요.');
+    }
+  }
   return value;
 }

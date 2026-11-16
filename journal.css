@@ -41,7 +41,7 @@
 .empty-journal h2 {font-size:17px;margin:13px 0;}
 .empty-journal p {font-size:13px;line-height:1.9;}
 .module-group-title {font-size:16px;margin:28px 0 14px;}
-.module-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.module-grid {display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}
 .nutrient-module {padding:18px 16px;background:#fff;border:1px solid #dfe7d9;border-radius:22px;min-width:0;}
 .module-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
 .module-heading h3 {font-size:14px;margin:0;}
@@ -100,5 +100,5 @@
 .nutrition-app .sheet input[type=date],.nutrition-app .sheet input[type=time] {width:100%;min-height:46px;-webkit-appearance:none;}
 .nutrition-app .uploadbox {display:flex;position:relative;flex-direction:column;align-items:center;justify-content:center;width:100%;}
 .nutrition-app .upload-preview {max-height:230px;object-fit:contain;}
-@media(min-width:650px){.nutrition-app main{padding:20px 38px 32px}.module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.calorie-board{padding:32px 24px}.food-entry{grid-template-columns:100px minmax(0,1fr)12px}.entry-image{height:104px}}
+@media(min-width:650px){.nutrition-app main{padding:20px 38px 32px}.calorie-board{padding:32px 24px}.food-entry{grid-template-columns:100px minmax(0,1fr)12px}.entry-image{height:104px}}
 @media(max-width:360px){.nutrition-app main{padding:8px 16px 24px}.module-grid{gap:8px}.nutrient-module{padding:13px 12px}.module-amount strong{font-size:20px}.calorie-board{padding:23px 10px}.nutrition-app .bottom-link{font-size:12px}}
